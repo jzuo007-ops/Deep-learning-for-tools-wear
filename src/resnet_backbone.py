@@ -111,7 +111,8 @@ class ResNet50_1D(nn.Module):
 
         x = self.layer1(x)
         x = self.layer2(x)
-        low_level_features = self.layer3(x)  # 供 FCN Aux 使用
+        x = self.layer3(x)
+        low_level_features = x  # 供 FCN Aux 使用
         x = self.layer4(x)  # 供 ASPP 使用
 
         return low_level_features, x
