@@ -1,4 +1,5 @@
 import os
+
 import numpy as np
 import torch
 from scipy.io import loadmat
@@ -7,18 +8,32 @@ from torch.utils.data import Dataset
 
 class ToolWear1DDataset(Dataset):
     """
-    面向 NASA Milling 数据的 1D 多通道分类数据集。
-    每个样本是一次刀具运行过程的多通道信号，标签由 VB 磨损值分成 3 类。
+    NASA Milling 1D multi-channel tool-wear classification dataset.
+    Current training uses binary labels:
+    class 0 = lower wear, class 1 = high wear.
     """
 
-    def __init__(self, data_root, mat_file="mill.mat", transforms=None, indices=None,
-                 label_thresholds=None, channel_keys=None, label_mode="quantile"):
+    def __init__(
+        self,
+        data_root,
+        mat_file="mill.mat",
+        transforms=None,
+        indices=None,
+        label_thresholds=None,
+        channel_keys=None,
+        label_mode="quantile",
+    ):
         super(ToolWear1DDataset, self).__init__()
         self.data_root = data_root
         self.transforms = transforms
-        self.label_thresholds = label_thresholds or (0.2, 0.4)
+        self.label_thresholds = label_thresholds or (0.4,)
         self.channel_keys = channel_keys or [
-            "smcAC", "smcDC", "vib_table", "vib_spindle", "AE_table", "AE_spindle"
+            "smcAC",
+            "smcDC",
+            "vib_table",
+            "vib_spindle",
+            "AE_table",
+            "AE_spindle",
         ]
         self.label_mode = label_mode
 
@@ -38,25 +53,24 @@ class ToolWear1DDataset(Dataset):
         else:
             self.indices = list(indices)
 
+        self.binary_threshold = self._resolve_binary_threshold()
         self.labels = self._build_labels()
+
+    def _resolve_binary_threshold(self):
+        if self.label_mode == "quantile" and len(self.valid_vbs) > 0:
+            return float(np.quantile(self.valid_vbs, 2 / 3))
+
+        thresholds = np.asarray(self.label_thresholds, dtype=np.float32).reshape(-1)
+        if thresholds.size == 0:
+            raise ValueError("label_thresholds must contain at least one threshold.")
+        return float(thresholds[-1])
 
     def _build_labels(self):
         labels = []
-        if self.label_mode == "quantile" and len(self.valid_vbs) > 0:
-            q1, q2 = np.quantile(self.valid_vbs, [1 / 3, 2 / 3])
-            thresholds = [q1, q2]
-        else:
-            thresholds = self.label_thresholds
-
         for idx in self.indices:
             record = self.records[idx]
             vb = float(np.asarray(record["VB"]).squeeze())
-            if np.isnan(vb):
-                label = 0
-            elif vb < thresholds[1]:
-                label = 0
-            else:
-                label = 1
+            label = 1 if np.isfinite(vb) and vb >= self.binary_threshold else 0
             labels.append(label)
         return np.asarray(labels, dtype=np.int64)
 
@@ -82,7 +96,16 @@ class ToolWear1DDataset(Dataset):
         if self.transforms is not None:
             signal, label = self.transforms(signal, label)
         else:
-            signal = signal[:, :2048] if signal.shape[1] >= 2048 else torch.nn.functional.pad(signal, (0, 2048 - signal.shape[1]), 'constant', 0)
+            default_length = 2048
+            if signal.shape[1] >= default_length:
+                signal = signal[:, :default_length]
+            else:
+                signal = torch.nn.functional.pad(
+                    signal,
+                    (0, default_length - signal.shape[1]),
+                    "constant",
+                    0,
+                )
 
         return signal, label
 

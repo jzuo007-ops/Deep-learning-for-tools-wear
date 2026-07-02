@@ -1,0 +1,87 @@
+Training Results Record
+=======================
+
+Date: 2026-07-02
+Environment: D:\AppInsDir\Anaconda3\envs\pytorch-py3.12
+Device: cuda:0
+PyTorch: 2.4.0
+
+Task
+----
+Dataset: NASA Milling
+Input channels: smcAC, smcDC, vib_table, vib_spindle, AE_table, AE_spindle
+Classification setting: binary tool-wear classification
+Class 0: lower wear
+Class 1: high wear
+Binary VB threshold: 0.400000
+
+Data Split
+----------
+Training samples: 116
+Validation samples: 30
+Sequence length: 8192
+Epochs: 30
+Batch size: 16
+
+Training Log
+------------
+Epoch [1/30] loss=0.8175 val_acc=0.6000 val_f1=0.3750
+Epoch [2/30] loss=0.6095 val_acc=0.6000 val_f1=0.3750
+Epoch [3/30] loss=0.7569 val_acc=0.6000 val_f1=0.3750
+Epoch [4/30] loss=0.5605 val_acc=0.6667 val_f1=0.5342
+Epoch [5/30] loss=0.3942 val_acc=0.8667 val_f1=0.8565
+Epoch [6/30] loss=0.4214 val_acc=0.8000 val_f1=0.7917
+Epoch [7/30] loss=0.5601 val_acc=0.8333 val_f1=0.8286
+Epoch [8/30] loss=0.4710 val_acc=0.8667 val_f1=0.8611
+Epoch [9/30] loss=0.4053 val_acc=0.9333 val_f1=0.9282
+Epoch [10/30] loss=0.4606 val_acc=0.8667 val_f1=0.8565
+Epoch [11/30] loss=0.3537 val_acc=0.8667 val_f1=0.8611
+Epoch [12/30] loss=0.4144 val_acc=0.8333 val_f1=0.8286
+Epoch [13/30] loss=0.4271 val_acc=0.8333 val_f1=0.8237
+Epoch [14/30] loss=0.2435 val_acc=0.8000 val_f1=0.7847
+Epoch [15/30] loss=0.2613 val_acc=0.8000 val_f1=0.7917
+Epoch [16/30] loss=0.2748 val_acc=0.8667 val_f1=0.8611
+Epoch [17/30] loss=0.3624 val_acc=0.8667 val_f1=0.8611
+Epoch [18/30] loss=0.2820 val_acc=0.8000 val_f1=0.7917
+Epoch [19/30] loss=0.2871 val_acc=0.8000 val_f1=0.7917
+Epoch [20/30] loss=0.4379 val_acc=0.8000 val_f1=0.7917
+Epoch [21/30] loss=0.4411 val_acc=0.8000 val_f1=0.7917
+Epoch [22/30] loss=0.2143 val_acc=0.7667 val_f1=0.7600
+Epoch [23/30] loss=0.2172 val_acc=0.8000 val_f1=0.7964
+Epoch [24/30] loss=0.2371 val_acc=0.7667 val_f1=0.7600
+Epoch [25/30] loss=0.2077 val_acc=0.8000 val_f1=0.7964
+Epoch [26/30] loss=0.1386 val_acc=0.8000 val_f1=0.7964
+Epoch [27/30] loss=0.2905 val_acc=0.8000 val_f1=0.7964
+Epoch [28/30] loss=0.1670 val_acc=0.8000 val_f1=0.7964
+Epoch [29/30] loss=0.1988 val_acc=0.8000 val_f1=0.7964
+Epoch [30/30] loss=0.2035 val_acc=0.8000 val_f1=0.7964
+
+Best Validation Result
+----------------------
+Best epoch: 9
+Accuracy: 0.9333
+Macro F1: 0.9282
+
+Final Evaluation On Validation Set
+----------------------------------
+Accuracy: 0.9333
+Macro F1: 0.9282
+Classes: [0 1]
+
+Confusion Matrix
+----------------
+[[18  1]
+ [ 1 10]]
+
+Interpretation
+--------------
+Total validation samples: 30
+Correct predictions: 28
+Incorrect predictions: 2
+Class 0: 18 correct, 1 misclassified
+Class 1: 10 correct, 1 misclassified
+
+Notes
+-----
+The training script selected the best model by validation Macro F1.
+During this run, best weights were kept in memory for evaluation because direct .pth checkpoint writing failed in the current Windows path.
