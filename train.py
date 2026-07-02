@@ -146,16 +146,26 @@ def main():
 
     data_root = os.path.join(".", "3. Milling")
     batch_size = 16
-    seq_length = 8192
+    use_vb_interpolation = True
+    window_size = 4096
+    window_stride = 2048
+    seq_length = window_size
     epochs = 30
     num_classes = 2
 
-    full_dataset = ToolWear1DDataset(data_root, mat_file="mill.mat", transforms=None)
+    full_dataset = ToolWear1DDataset(
+        data_root,
+        mat_file="mill.mat",
+        transforms=None,
+        impute_missing_vb=use_vb_interpolation,
+    )
     train_indices, val_indices = stratified_split(full_dataset.labels, train_ratio=0.8, seed=42)
     label_thresholds = (full_dataset.binary_threshold,)
 
     print(f"Binary VB threshold: {label_thresholds[0]:.6f}")
-    print(f"Train/val samples: {len(train_indices)}/{len(val_indices)}")
+    print(f"VB interpolation: {use_vb_interpolation}")
+    print(f"Window size/stride: {window_size}/{window_stride}")
+    print(f"Train/val runs: {len(train_indices)}/{len(val_indices)}")
 
     stats_dataset = ToolWear1DDataset(
         data_root,
@@ -164,6 +174,9 @@ def main():
         indices=train_indices,
         label_thresholds=label_thresholds,
         label_mode="threshold",
+        impute_missing_vb=use_vb_interpolation,
+        window_size=window_size,
+        window_stride=window_stride,
     )
     channel_means, channel_stds = compute_channel_stats(stats_dataset, batch_size=64)
 
@@ -179,6 +192,9 @@ def main():
         indices=train_indices,
         label_thresholds=label_thresholds,
         label_mode="threshold",
+        impute_missing_vb=use_vb_interpolation,
+        window_size=window_size,
+        window_stride=window_stride,
     )
     val_dataset = ToolWear1DDataset(
         data_root,
@@ -192,7 +208,11 @@ def main():
         indices=val_indices,
         label_thresholds=label_thresholds,
         label_mode="threshold",
+        impute_missing_vb=use_vb_interpolation,
+        window_size=window_size,
+        window_stride=window_stride,
     )
+    print(f"Train/val window samples: {len(train_dataset)}/{len(val_dataset)}")
 
     train_loader = DataLoader(
         train_dataset,

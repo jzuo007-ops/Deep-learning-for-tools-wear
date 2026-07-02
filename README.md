@@ -174,6 +174,46 @@ Classes: [0 1]
 - 高磨损类 `1`：11 个样本，10 个预测正确
 - 总计 30 个验证样本，28 个预测正确
 
+### 1D DeepLabV3-ResNet50 分类结果：VB 插值 + 滑窗扩增
+
+为进一步接近论文中的样本扩增思路，当前主分类数据集已支持：
+
+- 同一 `case` 内按 `run` 顺序对缺失 `VB` 做线性插值
+- 将每个 run 的原始 6 通道信号切成多个窗口样本
+- 先按 run 划分训练集和验证集，再在各自集合内切窗，避免同一个 run 的窗口同时进入训练集和验证集
+- 对原始信号中的极端异常值做稳健清洗，避免训练出现 `loss=nan`
+
+实验设置：
+
+```text
+VB interpolation: True
+Window size: 4096
+Window stride: 2048
+Binary VB threshold: 0.380000
+训练 run: 133
+验证 run: 34
+训练窗口样本: 532
+验证窗口样本: 139
+```
+
+验证集结果：
+
+```text
+Accuracy: 0.8993
+Macro F1: 0.8886
+```
+
+混淆矩阵：
+
+```text
+Classes: [0 1]
+
+[[84  7]
+ [ 7 41]]
+```
+
+该实验相比原始 run 级分类使用了更多窗口样本，协议更接近“插值补标签 + 滑窗扩增”的少样本扩充思路，但验证集定义也发生变化，因此结果不应直接和原始 30 个 run 的验证结果简单等价比较。
+
 ### Stacked-BiLSTM + Attention 回归结果
 
 复现实验代码位于：
@@ -274,6 +314,7 @@ MAPE: 24.18%
 ├── src/
 │   ├── __init__.py
 │   ├── deeplabv3_model.py
+│   ├── lstm_backbone.py
 │   └── resnet_backbone.py
 ├── stacked_bilstm_reproduction/
 │   ├── README.md
