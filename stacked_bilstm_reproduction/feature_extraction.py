@@ -1,6 +1,6 @@
 import os
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Sequence
+from typing import Dict, Iterable, List, Optional, Sequence
 
 import numpy as np
 from scipy.io import loadmat
@@ -23,6 +23,9 @@ class MillingRun:
     run_id: int
     vb: float
     features: np.ndarray
+    signals: Optional[np.ndarray] = None
+    process_features: Optional[np.ndarray] = None
+    original_vb: float = np.nan
 
 
 def _scalar_field(record, name: str, default: float = np.nan) -> float:
@@ -79,6 +82,9 @@ def time_domain_features(signal: np.ndarray) -> List[float]:
     sqrt_abs_mean = float(np.mean(np.sqrt(abs_x + 1e-8)))
     energy = float(np.mean(np.square(x)))
 
+    skewness = float(skew(x, bias=False)) if x.size > 2 and std > 1e-8 else 0.0
+    kurt = float(kurtosis(x, fisher=False, bias=False)) if x.size > 3 and std > 1e-8 else 0.0
+
     features = np.asarray([
         mean,
         std,
@@ -86,8 +92,8 @@ def time_domain_features(signal: np.ndarray) -> List[float]:
         peak,
         peak_to_peak,
         abs_mean,
-        float(skew(x, bias=False)) if x.size > 2 else 0.0,
-        float(kurtosis(x, fisher=False, bias=False)) if x.size > 3 else 0.0,
+        skewness,
+        kurt,
         _safe_div(rms, abs_mean),
         _safe_div(peak, rms),
         _safe_div(peak, abs_mean),
@@ -104,6 +110,8 @@ def load_milling_records(
     mat_file: str = "mill.mat",
     channels: Sequence[str] = DEFAULT_CHANNELS,
     include_process_features: bool = True,
+    impute_missing_vb: bool = False,
+    keep_signals: bool = False,
 ) -> List[MillingRun]:
     mat_path = os.path.join(data_root, mat_file)
     records = loadmat(mat_path)["mill"][0]
@@ -111,23 +119,30 @@ def load_milling_records(
 
     for record in records:
         vb = _scalar_field(record, "VB")
-        if not np.isfinite(vb):
-            continue
-
         case_id = int(_scalar_field(record, "case", default=0))
         run_id = int(_scalar_field(record, "run", default=len(runs)))
         features: List[float] = []
+        signal_rows: List[np.ndarray] = []
 
         for channel in channels:
             if channel not in record.dtype.names:
                 raise KeyError(f"Channel {channel!r} not found in mill.mat record.")
             features.extend(time_domain_features(record[channel]))
+            if keep_signals:
+                signal_rows.append(_clean_signal(record[channel]).astype(np.float32))
 
+        process_features: List[float] = []
         if include_process_features:
             for name in ("DOC", "feed", "material"):
                 value = _scalar_field(record, name)
                 if np.isfinite(value):
-                    features.append(float(np.clip(value, -1e6, 1e6)))
+                    process_features.append(float(np.clip(value, -1e6, 1e6)))
+
+        features.extend(process_features)
+        signals = None
+        if keep_signals and signal_rows:
+            min_len = min(len(row) for row in signal_rows)
+            signals = np.stack([row[:min_len] for row in signal_rows], axis=0)
 
         runs.append(
             MillingRun(
@@ -140,11 +155,37 @@ def load_milling_records(
                     posinf=0.0,
                     neginf=0.0,
                 ),
+                signals=signals,
+                process_features=np.asarray(process_features, dtype=np.float32)
+                if process_features
+                else None,
+                original_vb=float(vb),
             )
         )
 
     runs.sort(key=lambda item: (item.case_id, item.run_id))
-    return runs
+    if impute_missing_vb:
+        _interpolate_missing_vb_by_case(runs)
+
+    return [run for run in runs if np.isfinite(run.vb)]
+
+
+def _interpolate_missing_vb_by_case(runs: List[MillingRun]) -> None:
+    grouped = group_runs_by_case(runs)
+    for case_runs in grouped.values():
+        run_ids = np.asarray([run.run_id for run in case_runs], dtype=np.float64)
+        vbs = np.asarray([run.vb for run in case_runs], dtype=np.float64)
+        known = np.isfinite(vbs)
+
+        if known.sum() == 0:
+            continue
+        if known.sum() == 1:
+            filled = np.full_like(vbs, vbs[known][0], dtype=np.float64)
+        else:
+            filled = np.interp(run_ids, run_ids[known], vbs[known])
+
+        for run, vb in zip(case_runs, filled):
+            run.vb = float(vb)
 
 
 def group_runs_by_case(runs: Iterable[MillingRun]) -> Dict[int, List[MillingRun]]:

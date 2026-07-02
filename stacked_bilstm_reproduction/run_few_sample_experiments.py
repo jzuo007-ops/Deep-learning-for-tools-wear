@@ -12,9 +12,14 @@ CURRENT_DIR = Path(__file__).resolve().parent
 def parse_args():
     parser = argparse.ArgumentParser(description="Run few-sample Stacked-BiLSTM experiments.")
     parser.add_argument("--ratios", nargs="+", type=float, default=[0.1, 0.2, 0.3, 0.4, 0.5])
-    parser.add_argument("--split-mode", choices=["chronological", "case_holdout", "random"], default="chronological")
-    parser.add_argument("--epochs", type=int, default=300)
+    parser.add_argument("--split-mode", choices=["chronological", "case_holdout", "random", "random_run"], default="random_run")
+    parser.add_argument("--sample-mode", choices=["run_sequence", "segment_sequence"], default="segment_sequence")
+    parser.add_argument("--epochs", type=int, default=120)
     parser.add_argument("--lookback", type=int, default=5)
+    parser.add_argument("--n-segments", type=int, default=16)
+    parser.add_argument("--segment-window", type=int, default=8)
+    parser.add_argument("--segment-step", type=int, default=4)
+    parser.add_argument("--no-impute-vb", action="store_true")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--data-root", default="3. Milling")
     parser.add_argument("--mat-file", default="mill.mat")
@@ -39,6 +44,8 @@ def main():
             args.mat_file,
             "--output-dir",
             str(run_dir),
+            "--sample-mode",
+            args.sample_mode,
             "--train-ratio",
             str(ratio),
             "--split-mode",
@@ -47,9 +54,17 @@ def main():
             str(args.epochs),
             "--lookback",
             str(args.lookback),
+            "--n-segments",
+            str(args.n_segments),
+            "--segment-window",
+            str(args.segment_window),
+            "--segment-step",
+            str(args.segment_step),
             "--seed",
             str(args.seed),
         ]
+        if args.no_impute_vb:
+            command.append("--no-impute-vb")
         print("\nRunning:", " ".join(command))
         subprocess.run(command, check=True)
 
@@ -57,6 +72,7 @@ def main():
             summary = json.load(file)
         row = {
             "train_ratio": ratio,
+            "sample_mode": args.sample_mode,
             "split_mode": args.split_mode,
             "test_MAE": summary["test_metrics"]["MAE"],
             "test_RMSE": summary["test_metrics"]["RMSE"],
@@ -78,4 +94,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

@@ -1,61 +1,87 @@
 # Stacked-BiLSTM Few-Sample Tool-Wear Reproduction
 
-本文件夹包含论文的独立复制式实现：
+This folder contains a reproduction-style implementation for:
 
-```
-Tool-wear-prediction-with-few-samples-based-on-stacked-BiLSTM-an_2026_Measur.pdf
-```
+`Tool-wear-prediction-with-few-samples-based-on-stacked-BiLSTM-an_2026_Measur.pdf`
 
-PDF文本图层无法在此工作区中可靠提取，因此本代码遵循论文标题和本地NASA铣削数据集所暗示的方法：
+The PDF text layer could not be extracted reliably in this workspace, so the code is built around the paper title and the local NASA Milling data. The current closer protocol uses:
 
-- 原始多通道铣信号
-- 每次切割批次手工制作的统计特征
-- 少样本训练分段
-- 堆叠双向LSTM
-- 时间注意力
-- 连续VB工具磨损预测
-- MAE、RMSE、R2和MAPE评估
+- missing VB interpolation within each machining case
+- raw signal segmentation inside each cutting run
+- handcrafted time-domain features per signal segment
+- stacked BiLSTM + temporal attention
+- continuous VB regression
+- MAE, RMSE, R2 and MAPE evaluation
 
-## 文件
+## Files
 
+- `feature_extraction.py`: loads `mill.mat`, cleans abnormal signal values, extracts features, and can interpolate missing VB labels.
+- `dataset.py`: builds either cross-run sequences or within-run segment sequences.
+- `model.py`: stacked BiLSTM with temporal attention for VB regression.
+- `metrics.py`: regression metrics.
+- `train_stacked_bilstm.py`: single experiment entry point.
+- `run_few_sample_experiments.py`: few-sample train-ratio sweep.
 
+## Recommended Run
 
-- `feature_extraction.py`： 加载并提取每次运行的统计特征。`mill.mat`
-- `dataset.py`：构建序列窗口和少量样本的列车/验证/测试拆分。
-- `model.py`：堆叠BiLSTM并关注VB回归。
-- `metrics.py`：回归指标。
-- `train_stacked_bilstm.py`：主要培训和评估入口。
-- `run_few_sample_experiments.py`： 在一个命令中运行多个少样本比例。
+From the project root:
 
-## 快速入门
-
-
-
-摘自项目根源：
-
-```
-& 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' stacked_bilstm_reproduction\train_stacked_bilstm.py
+```powershell
+& 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' stacked_bilstm_reproduction\train_stacked_bilstm.py --data-root '3. Milling'
 ```
 
+Default closer-to-paper protocol:
 
+- `--sample-mode segment_sequence`
+- `--impute-vb`
+- `--n-segments 16`
+- `--segment-window 8`
+- `--segment-step 4`
+- `--split-mode random_run`
+- `--train-ratio 0.30`
+- `--epochs 120`
 
-运行多个少数样本比例：
+Outputs are written to:
 
+```text
+stacked_bilstm_reproduction/outputs/single_run/
 ```
-& 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' stacked_bilstm_reproduction\run_few_sample_experiments.py
+
+Important output files:
+
+- `summary.json`: final metrics and experiment settings.
+- `training_log.csv`: epoch-by-epoch validation metrics.
+- `test_predictions.csv`: true and predicted VB values for test samples.
+- `test_attention.npy`: attention weights.
+
+## Few-Sample Sweep
+
+```powershell
+& 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' stacked_bilstm_reproduction\run_few_sample_experiments.py --data-root '3. Milling'
 ```
 
+The summary table is saved to:
 
+```text
+stacked_bilstm_reproduction/outputs/few_sample_sweep/few_sample_summary.csv
+```
 
-输出写在 。`stacked_bilstm_reproduction/outputs/`
+## Alternative Protocols
 
-## 默认实验
+Use the older cross-run feature sequence:
 
+```powershell
+& 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' stacked_bilstm_reproduction\train_stacked_bilstm.py --data-root '3. Milling' --sample-mode run_sequence
+```
 
+Disable VB interpolation:
 
-- 数据集：`3. Milling/mill.mat`
-- 通道：， ， ，`smcAC``smcDC``vib_table``vib_spindle``AE_table``AE_spindle`
-- 目标：连续`VB`
-- 序列窗口：同一机壳内连续5次切割
-- 少样本列车比：默认为0.30
-- 模型：二层BiLSTM + 注意 + 回归头
+```powershell
+& 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' stacked_bilstm_reproduction\train_stacked_bilstm.py --data-root '3. Milling' --no-impute-vb
+```
+
+Use sample-level random split. This often reports better numbers, but can leak windows from the same run across train/test when segment windows are used:
+
+```powershell
+& 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' stacked_bilstm_reproduction\train_stacked_bilstm.py --data-root '3. Milling' --split-mode random
+```

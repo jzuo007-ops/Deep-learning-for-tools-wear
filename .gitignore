@@ -6,5 +6,6 @@ __pycache__/
 
 checkpoints/
 stacked_bilstm_reproduction/outputs/
+stacked_bilstm_reproduction/paper_pages/
 
 *.pth

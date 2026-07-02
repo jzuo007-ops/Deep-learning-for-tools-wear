@@ -5,8 +5,6 @@ import os
 import random
 import sys
 from pathlib import Path
-from typing import Dict, Tuple
-
 import numpy as np
 import torch
 import torch.nn as nn
@@ -16,7 +14,14 @@ CURRENT_DIR = Path(__file__).resolve().parent
 if str(CURRENT_DIR) not in sys.path:
     sys.path.insert(0, str(CURRENT_DIR))
 
-from dataset import WearSequenceDataset, apply_normalizer, build_sequence_samples, fit_normalizer, make_split
+from dataset import (
+    WearSequenceDataset,
+    apply_normalizer,
+    build_segment_samples,
+    build_sequence_samples,
+    fit_normalizer,
+    make_split,
+)
 from feature_extraction import DEFAULT_CHANNELS, load_milling_records
 from metrics import regression_metrics
 from model import StackedBiLSTMAttentionRegressor
@@ -33,15 +38,26 @@ def set_seed(seed: int) -> None:
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Few-sample stacked BiLSTM tool-wear prediction.")
-    parser.add_argument("--data-root", default="3. Milling", help="Folder containing mill.mat.")
+    parser.add_argument("--data-root", default="../3. Milling", help="Folder containing mill.mat.")
     parser.add_argument("--mat-file", default="mill.mat")
     parser.add_argument("--output-dir", default=str(CURRENT_DIR / "outputs" / "single_run"))
+    parser.add_argument(
+        "--sample-mode",
+        choices=["run_sequence", "segment_sequence"],
+        default="segment_sequence",
+        help="run_sequence uses consecutive cutting runs; segment_sequence slices each raw signal into a temporal sequence.",
+    )
     parser.add_argument("--lookback", type=int, default=5)
     parser.add_argument("--predict-next", action="store_true", help="Predict the next run VB instead of the last run in the window.")
-    parser.add_argument("--split-mode", choices=["chronological", "case_holdout", "random"], default="chronological")
+    parser.add_argument("--n-segments", type=int, default=16, help="Number of signal segments per cutting run.")
+    parser.add_argument("--segment-window", type=int, default=8, help="Sliding segment window length. Use 0 for the full segment sequence.")
+    parser.add_argument("--segment-step", type=int, default=4, help="Step size for sliding segment windows.")
+    parser.add_argument("--split-mode", choices=["chronological", "case_holdout", "random", "random_run"], default="random")
+    parser.add_argument("--impute-vb", dest="impute_vb", action="store_true", help="Interpolate missing VB values within each case.")
+    parser.add_argument("--no-impute-vb", dest="impute_vb", action="store_false", help="Use only records with measured VB labels.")
     parser.add_argument("--train-ratio", type=float, default=0.30)
     parser.add_argument("--val-ratio", type=float, default=0.20)
-    parser.add_argument("--epochs", type=int, default=300)
+    parser.add_argument("--epochs", type=int, default=120)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--hidden-dim", type=int, default=64)
     parser.add_argument("--num-layers", type=int, default=2)
@@ -52,12 +68,32 @@ def parse_args():
     parser.add_argument("--patience", type=int, default=50)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--cpu", action="store_true")
+    parser.set_defaults(impute_vb=True)
     return parser.parse_args()
 
 
 def make_loaders(args):
-    runs = load_milling_records(args.data_root, mat_file=args.mat_file, channels=DEFAULT_CHANNELS)
-    x, y, meta = build_sequence_samples(runs, lookback=args.lookback, predict_next=args.predict_next)
+    keep_signals = args.sample_mode == "segment_sequence"
+    runs = load_milling_records(
+        args.data_root,
+        mat_file=args.mat_file,
+        channels=DEFAULT_CHANNELS,
+        impute_missing_vb=args.impute_vb,
+        keep_signals=keep_signals,
+    )
+    if args.sample_mode == "run_sequence":
+        x, y, meta = build_sequence_samples(
+            runs,
+            lookback=args.lookback,
+            predict_next=args.predict_next,
+        )
+    else:
+        x, y, meta = build_segment_samples(
+            runs,
+            n_segments=args.n_segments,
+            segment_window=args.segment_window,
+            segment_step=args.segment_step,
+        )
     split = make_split(
         x,
         y,
@@ -212,9 +248,14 @@ def main():
         "device": str(device),
         "n_runs": n_runs,
         "n_sequences": n_sequences,
+        "sample_mode": args.sample_mode,
         "split_mode": args.split_mode,
+        "impute_vb": args.impute_vb,
         "lookback": args.lookback,
         "predict_next": args.predict_next,
+        "n_segments": args.n_segments,
+        "segment_window": args.segment_window,
+        "segment_step": args.segment_step,
         "train_ratio": args.train_ratio,
         "val_ratio": args.val_ratio,
         "split_sizes": {key: len(value.dataset) for key, value in loaders.items()},
@@ -240,4 +281,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

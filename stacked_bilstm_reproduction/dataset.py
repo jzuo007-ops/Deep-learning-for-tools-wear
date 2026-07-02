@@ -5,7 +5,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from feature_extraction import MillingRun, group_runs_by_case
+from feature_extraction import MillingRun, group_runs_by_case, time_domain_features
 
 
 @dataclass
@@ -64,6 +64,74 @@ def build_sequence_samples(
 
     if not x_samples:
         raise ValueError("No sequence samples were created. Reduce lookback or check the dataset.")
+
+    return (
+        np.stack(x_samples, axis=0).astype(np.float32),
+        np.asarray(y_samples, dtype=np.float32),
+        np.asarray(meta_samples, dtype=np.int64),
+    )
+
+
+def _segment_boundaries(signal_length: int, n_segments: int) -> List[Tuple[int, int]]:
+    if n_segments <= 0:
+        raise ValueError("n_segments must be positive.")
+    boundaries = []
+    points = np.linspace(0, signal_length, n_segments + 1, dtype=np.int64)
+    for start, end in zip(points[:-1], points[1:]):
+        if end <= start:
+            end = min(signal_length, start + 1)
+        boundaries.append((int(start), int(end)))
+    return boundaries
+
+
+def _run_segment_features(run: MillingRun, n_segments: int, include_process_features: bool = True) -> np.ndarray:
+    if run.signals is None:
+        raise ValueError("MillingRun.signals is required for segment_sequence samples.")
+
+    c, signal_length = run.signals.shape
+    steps = []
+    for start, end in _segment_boundaries(signal_length, n_segments):
+        step_features: List[float] = []
+        for channel_idx in range(c):
+            step_features.extend(time_domain_features(run.signals[channel_idx, start:end]))
+        if include_process_features and run.process_features is not None:
+            step_features.extend(run.process_features.tolist())
+        steps.append(np.asarray(step_features, dtype=np.float32))
+    return np.stack(steps, axis=0)
+
+
+def build_segment_samples(
+    runs: Sequence[MillingRun],
+    n_segments: int = 16,
+    segment_window: int = 0,
+    segment_step: int = 1,
+    include_process_features: bool = True,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    x_samples: List[np.ndarray] = []
+    y_samples: List[float] = []
+    meta_samples: List[Tuple[int, int]] = []
+
+    for run in runs:
+        if run.signals is None or not np.isfinite(run.vb):
+            continue
+
+        sequence = _run_segment_features(
+            run,
+            n_segments=n_segments,
+            include_process_features=include_process_features,
+        )
+        window = segment_window if segment_window and segment_window > 0 else n_segments
+        if window > n_segments:
+            raise ValueError("segment_window cannot be greater than n_segments.")
+
+        for start in range(0, n_segments - window + 1, max(1, segment_step)):
+            end = start + window
+            x_samples.append(sequence[start:end])
+            y_samples.append(run.vb)
+            meta_samples.append((run.case_id, run.run_id))
+
+    if not x_samples:
+        raise ValueError("No segment samples were created. Check n_segments and signal availability.")
 
     return (
         np.stack(x_samples, axis=0).astype(np.float32),
@@ -131,6 +199,34 @@ def random_split(
     }
 
 
+def random_group_split(
+    meta: np.ndarray,
+    train_ratio: float = 0.3,
+    val_ratio: float = 0.2,
+    seed: int = 42,
+) -> Dict[str, np.ndarray]:
+    groups = np.unique(meta, axis=0)
+    rng = np.random.default_rng(seed)
+    rng.shuffle(groups)
+
+    n_groups = len(groups)
+    train_end = max(1, int(n_groups * train_ratio))
+    val_end = min(n_groups - 1, train_end + max(1, int(n_groups * val_ratio)))
+    split_groups = {
+        "train": {tuple(item) for item in groups[:train_end]},
+        "val": {tuple(item) for item in groups[train_end:val_end]},
+        "test": {tuple(item) for item in groups[val_end:]},
+    }
+
+    return {
+        name: np.asarray(
+            [i for i, item in enumerate(meta) if tuple(item) in selected_groups],
+            dtype=np.int64,
+        )
+        for name, selected_groups in split_groups.items()
+    }
+
+
 def make_split(
     x: np.ndarray,
     y: np.ndarray,
@@ -146,6 +242,8 @@ def make_split(
         return case_holdout_split(meta, train_ratio=train_ratio, val_ratio=val_ratio)
     if split_mode == "random":
         return random_split(len(y), train_ratio=train_ratio, val_ratio=val_ratio, seed=seed)
+    if split_mode == "random_run":
+        return random_group_split(meta, train_ratio=train_ratio, val_ratio=val_ratio, seed=seed)
     raise ValueError(f"Unknown split_mode: {split_mode}")
 
 
@@ -160,4 +258,3 @@ def fit_normalizer(x_train: np.ndarray, y_train: np.ndarray) -> Normalizer:
 
 def apply_normalizer(x: np.ndarray, y: np.ndarray, normalizer: Normalizer) -> Tuple[np.ndarray, np.ndarray]:
     return normalizer.transform_features(x).astype(np.float32), normalizer.transform_target(y).astype(np.float32)
-
