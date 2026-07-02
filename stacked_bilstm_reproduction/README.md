@@ -1,50 +1,61 @@
 # Stacked-BiLSTM Few-Sample Tool-Wear Reproduction
 
-This folder contains an independent reproduction-style implementation for the paper:
+本文件夹包含论文的独立复制式实现：
 
-`Tool-wear-prediction-with-few-samples-based-on-stacked-BiLSTM-an_2026_Measur.pdf`
+```
+Tool-wear-prediction-with-few-samples-based-on-stacked-BiLSTM-an_2026_Measur.pdf
+```
 
-The PDF text layer could not be extracted reliably in this workspace, so this code follows the method implied by the paper title and the local NASA Milling dataset:
+PDF文本图层无法在此工作区中可靠提取，因此本代码遵循论文标题和本地NASA铣削数据集所暗示的方法：
 
-- raw multi-channel milling signals
-- handcrafted statistical features per cutting run
-- few-sample training splits
-- stacked bidirectional LSTM
-- temporal attention
-- continuous VB tool-wear prediction
-- MAE, RMSE, R2 and MAPE evaluation
+- 原始多通道铣信号
+- 每次切割批次手工制作的统计特征
+- 少样本训练分段
+- 堆叠双向LSTM
+- 时间注意力
+- 连续VB工具磨损预测
+- MAE、RMSE、R2和MAPE评估
 
-## Files
+## 文件
 
-- `feature_extraction.py`: loads `mill.mat` and extracts per-run statistical features.
-- `dataset.py`: builds sequence windows and few-sample train/validation/test splits.
-- `model.py`: stacked BiLSTM with attention for VB regression.
-- `metrics.py`: regression metrics.
-- `train_stacked_bilstm.py`: main training and evaluation entry point.
-- `run_few_sample_experiments.py`: runs several few-sample ratios in one command.
 
-## Quick Start
 
-From the project root:
+- `feature_extraction.py`： 加载并提取每次运行的统计特征。`mill.mat`
+- `dataset.py`：构建序列窗口和少量样本的列车/验证/测试拆分。
+- `model.py`：堆叠BiLSTM并关注VB回归。
+- `metrics.py`：回归指标。
+- `train_stacked_bilstm.py`：主要培训和评估入口。
+- `run_few_sample_experiments.py`： 在一个命令中运行多个少样本比例。
 
-```powershell
+## 快速入门
+
+
+
+摘自项目根源：
+
+```
 & 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' stacked_bilstm_reproduction\train_stacked_bilstm.py
 ```
 
-Run multiple few-sample ratios:
 
-```powershell
+
+运行多个少数样本比例：
+
+```
 & 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' stacked_bilstm_reproduction\run_few_sample_experiments.py
 ```
 
-Outputs are written under `stacked_bilstm_reproduction/outputs/`.
 
-## Default Experiment
 
-- Dataset: `3. Milling/mill.mat`
-- Channels: `smcAC`, `smcDC`, `vib_table`, `vib_spindle`, `AE_table`, `AE_spindle`
-- Target: continuous `VB`
-- Sequence window: 5 consecutive cutting runs within the same case
-- Few-sample train ratio: 0.30 by default
-- Model: 2-layer BiLSTM + attention + regression head
+输出写在 。`stacked_bilstm_reproduction/outputs/`
 
+## 默认实验
+
+
+
+- 数据集：`3. Milling/mill.mat`
+- 通道：， ， ，`smcAC``smcDC``vib_table``vib_spindle``AE_table``AE_spindle`
+- 目标：连续`VB`
+- 序列窗口：同一机壳内连续5次切割
+- 少样本列车比：默认为0.30
+- 模型：二层BiLSTM + 注意 + 回归头
