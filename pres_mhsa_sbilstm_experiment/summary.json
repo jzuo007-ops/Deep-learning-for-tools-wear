@@ -1,0 +1,71 @@
+{
+  "model": "PRes-MHSA-SBiLSTM",
+  "device": "cuda:0",
+  "data_root": "E:\\\u8bba\u6587\u53c2\u8003\u6587\u732e\\\u5c0f\u8bba\u6587\\Code\\Deep-learning-for-tools-wear\\3. Milling",
+  "preprocessing": "DWT + cubic VB interpolation + LOWESS-style smoothing",
+  "features": "12 current features + 12 vibration features",
+  "train_ratio": 0.8,
+  "batch_size": 15,
+  "max_iterations": 1500,
+  "lr": 0.012,
+  "cases": [
+    {
+      "case_id": 11,
+      "paper_experiment": "E1",
+      "segments_per_run": 5,
+      "n_valid_runs": 20,
+      "n_augmented_segments": 100,
+      "sequence_length": 5,
+      "n_sequences": 96,
+      "split_sizes": {
+        "train": 77,
+        "test": 19
+      },
+      "train_metrics": {
+        "MAE": 0.026398029613804507,
+        "RMSE": 0.036681339111295126,
+        "R2": 0.967918172869389,
+        "MAPE_percent": 25.373779732659653,
+        "MAE_um": 26.398029613804507,
+        "RMSE_um": 36.681339111295124
+      },
+      "test_metrics": {
+        "MAE": 0.07347223946922704,
+        "RMSE": 0.117172607130033,
+        "R2": 0.7755448106795594,
+        "MAPE_percent": 51.34749902878802,
+        "MAE_um": 73.47223946922703,
+        "RMSE_um": 117.172607130033
+      }
+    },
+    {
+      "case_id": 2,
+      "paper_experiment": "E2",
+      "segments_per_run": 8,
+      "n_valid_runs": 13,
+      "n_augmented_segments": 104,
+      "sequence_length": 5,
+      "n_sequences": 100,
+      "split_sizes": {
+        "train": 80,
+        "test": 20
+      },
+      "train_metrics": {
+        "MAE": 0.014748559519648551,
+        "RMSE": 0.01679212341614361,
+        "R2": 0.9858930191519673,
+        "MAPE_percent": 7.605239373955808,
+        "MAE_um": 14.748559519648552,
+        "RMSE_um": 16.79212341614361
+      },
+      "test_metrics": {
+        "MAE": 0.020720111578702925,
+        "RMSE": 0.024197852778617107,
+        "R2": 0.9430801402119242,
+        "MAPE_percent": 11.122052669309124,
+        "MAE_um": 20.720111578702927,
+        "RMSE_um": 24.197852778617108
+      }
+    }
+  ]
+}

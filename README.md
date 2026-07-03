@@ -448,11 +448,38 @@ MAPE: 11.12%
 
 当前仍未完全复现论文结果，主要差异包括：当前环境未安装 EMD 库，因此振动信号尚未执行论文中的 EMD 分解；论文未公开随机划分 seed、具体所选电流/振动通道、网络层数细节和 LOWESS 参数，小样本随机划分对结果影响较大。
 
+#### 新增回归模型对比：PRes-MHSA-SBiLSTM 与 CNN-BiLSTM-Attention
+
+考虑到 DeepLabV3 更适合语义分割而不是 run/window 级 VB 预测，新增两个独立回归实验目录：
+
+```text
+pres_mhsa_sbilstm_experiment/
+cnn_bilstm_attention_experiment/
+```
+
+两个实验均采用相同数据协议：
+
+- `Case 11` 作为 E1，`Case 2` 作为 E2。
+- DWT 降噪、三次样条 VB 插值、LOWESS 风格特征平滑。
+- 12 个电流特征 + 12 个振动特征。
+- 80% / 20% 随机划分。
+- `Adam`，初始学习率 `0.012`，最大迭代 `1500`，batch size `15`。
+
+测试集结果对比：
+
+| Model | E1 / Case 11 RMSE | E1 / Case 11 MAE | E2 / Case 2 RMSE | E2 / Case 2 MAE |
+| --- | ---: | ---: | ---: | ---: |
+| Paper PMS | 7.70 um | 6.30 um | 10.50 um | 8.20 um |
+| PRes-MHSA-SBiLSTM | 117.17 um | 73.47 um | 24.20 um | 20.72 um |
+| CNN-BiLSTM-Attention | 29.66 um | 22.72 um | 13.58 um | 10.47 um |
+
+当前结果显示，`CNN-BiLSTM-Attention` 明显优于当前实现的 `PRes-MHSA-SBiLSTM`；尤其在 `Case 2 / E2` 上已经接近论文表 6 的 PMS 指标。后续更值得优先沿着 `CNN-BiLSTM-Attention` 做调参、消融和预测曲线分析。
+
 ### 结果说明
 
 分类实验中的 1D DeepLabV3-ResNet50 在当前二分类验证集上表现较好，`Accuracy` 达到 `0.9333`，`Macro F1` 达到 `0.9282`。
 
-回归实验中，`random_run` 更能反映模型对未见 run 的泛化能力；`random` 则更接近窗口级随机划分，结果更高，但需要在论文或报告中说明其划分方式。论文口径 PMS 实验已经把数据集范围、样本扩增方式、训练比例和超参数向论文靠齐，但由于 EMD 和若干未公开细节仍不一致，当前结果只能作为进一步逼近的实验基线。
+回归实验中，`random_run` 更能反映模型对未见 run 的泛化能力；`random` 则更接近窗口级随机划分，结果更高，但需要在论文或报告中说明其划分方式。论文口径 PMS 实验已经把数据集范围、样本扩增方式、训练比例和超参数向论文靠齐，但由于 EMD 和若干未公开细节仍不一致，当前结果只能作为进一步逼近的实验基线。新增的 `CNN-BiLSTM-Attention` 在当前划分下表现最好，更适合作为下一步主线模型。
 
 ## Stacked-BiLSTM 少样本复现实验
 
@@ -495,6 +522,16 @@ MAPE: 11.12%
 │   ├── deeplabv3_model.py
 │   ├── lstm_backbone.py
 │   └── resnet_backbone.py
+├── cnn_bilstm_attention_experiment/
+│   ├── README.md
+│   ├── results.txt
+│   ├── summary.json
+│   └── train_cnn_bilstm_attention.py
+├── pres_mhsa_sbilstm_experiment/
+│   ├── README.md
+│   ├── results.txt
+│   ├── summary.json
+│   └── train_pres_mhsa_sbilstm.py
 ├── stacked_bilstm_reproduction/
 │   ├── README.md
 │   ├── dataset.py
@@ -515,6 +552,6 @@ MAPE: 11.12%
 本项目当前更适合用于两类实验：
 
 1. 将 1D DeepLabV3-ResNet50 用于刀具磨损状态分类。
-2. 将 Stacked-BiLSTM + Attention 用于少样本连续 VB 回归预测。
+2. 将 Stacked-BiLSTM、PRes-MHSA-SBiLSTM、CNN-BiLSTM-Attention 用于少样本连续 VB 回归预测。
 
 如果用于论文实验，建议明确区分分类任务和回归任务，并在结果表中分别报告分类指标和回归指标。
