@@ -85,3 +85,22 @@ Notes
 -----
 The training script selected the best model by validation Macro F1.
 During this run, best weights were kept in memory for evaluation because direct .pth checkpoint writing failed in the current Windows path.
+
+1D DeepLabV3-ResNet50 classification: cubic VB interpolation + DWT
+Device: cuda:0
+VB interpolation: True
+VB interpolation method: cubic
+DWT denoise: True
+DWT channels: smcAC, smcDC, vib_table, vib_spindle
+Window size/stride: 4096/2048
+Binary VB threshold: 0.380000
+Train/val runs: 133/34
+Train/val window samples: 532/139
+Accuracy: 0.8561
+Macro F1: 0.8475
+Best validation Accuracy: 0.8561
+Best validation Macro F1: 0.8475
+Classes: [0, 1]
+Confusion matrix:
+[[76 15]
+ [ 5 43]]

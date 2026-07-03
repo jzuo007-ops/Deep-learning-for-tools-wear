@@ -147,6 +147,9 @@ def main():
     data_root = os.path.join(".", "3. Milling")
     batch_size = 16
     use_vb_interpolation = True
+    vb_interpolation_method = "cubic"
+    use_dwt_denoise = True
+    dwt_channels = ["smcAC", "smcDC", "vib_table", "vib_spindle"]
     window_size = 4096
     window_stride = 2048
     seq_length = window_size
@@ -158,12 +161,16 @@ def main():
         mat_file="mill.mat",
         transforms=None,
         impute_missing_vb=use_vb_interpolation,
+        vb_interpolation_method=vb_interpolation_method,
     )
     train_indices, val_indices = stratified_split(full_dataset.labels, train_ratio=0.8, seed=42)
     label_thresholds = (full_dataset.binary_threshold,)
 
     print(f"Binary VB threshold: {label_thresholds[0]:.6f}")
     print(f"VB interpolation: {use_vb_interpolation}")
+    print(f"VB interpolation method: {vb_interpolation_method}")
+    print(f"DWT denoise: {use_dwt_denoise}")
+    print(f"DWT channels: {dwt_channels}")
     print(f"Window size/stride: {window_size}/{window_stride}")
     print(f"Train/val runs: {len(train_indices)}/{len(val_indices)}")
 
@@ -175,6 +182,9 @@ def main():
         label_thresholds=label_thresholds,
         label_mode="threshold",
         impute_missing_vb=use_vb_interpolation,
+        vb_interpolation_method=vb_interpolation_method,
+        use_dwt_denoise=use_dwt_denoise,
+        dwt_channels=dwt_channels,
         window_size=window_size,
         window_stride=window_stride,
     )
@@ -193,6 +203,9 @@ def main():
         label_thresholds=label_thresholds,
         label_mode="threshold",
         impute_missing_vb=use_vb_interpolation,
+        vb_interpolation_method=vb_interpolation_method,
+        use_dwt_denoise=use_dwt_denoise,
+        dwt_channels=dwt_channels,
         window_size=window_size,
         window_stride=window_stride,
     )
@@ -209,6 +222,9 @@ def main():
         label_thresholds=label_thresholds,
         label_mode="threshold",
         impute_missing_vb=use_vb_interpolation,
+        vb_interpolation_method=vb_interpolation_method,
+        use_dwt_denoise=use_dwt_denoise,
+        dwt_channels=dwt_channels,
         window_size=window_size,
         window_stride=window_stride,
     )
@@ -293,6 +309,26 @@ def main():
     print("Classes:", classes)
     print("Confusion matrix:")
     print(confusion)
+
+    with open("training_results.txt", "a", encoding="utf-8") as file:
+        file.write("\n1D DeepLabV3-ResNet50 classification: cubic VB interpolation + DWT\n")
+        file.write(f"Device: {device}\n")
+        file.write(f"VB interpolation: {use_vb_interpolation}\n")
+        file.write(f"VB interpolation method: {vb_interpolation_method}\n")
+        file.write(f"DWT denoise: {use_dwt_denoise}\n")
+        file.write(f"DWT channels: {', '.join(dwt_channels)}\n")
+        file.write(f"Window size/stride: {window_size}/{window_stride}\n")
+        file.write(f"Binary VB threshold: {label_thresholds[0]:.6f}\n")
+        file.write(f"Train/val runs: {len(train_indices)}/{len(val_indices)}\n")
+        file.write(f"Train/val window samples: {len(train_dataset)}/{len(val_dataset)}\n")
+        file.write(f"Accuracy: {test_acc:.4f}\n")
+        file.write(f"Macro F1: {test_f1:.4f}\n")
+        file.write(f"Best validation Accuracy: {best_val_acc:.4f}\n")
+        file.write(f"Best validation Macro F1: {best_val_f1:.4f}\n")
+        file.write(f"Classes: {classes.tolist()}\n")
+        file.write("Confusion matrix:\n")
+        file.write(np.array2string(confusion))
+        file.write("\n")
 
 
 if __name__ == "__main__":

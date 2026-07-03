@@ -1,6 +1,8 @@
 import os
 
 import numpy as np
+import pywt
+from scipy.interpolate import CubicSpline
 import torch
 from scipy.io import loadmat
 from torch.utils.data import Dataset
@@ -23,6 +25,11 @@ class ToolWear1DDataset(Dataset):
         channel_keys=None,
         label_mode="quantile",
         impute_missing_vb=False,
+        vb_interpolation_method="linear",
+        use_dwt_denoise=False,
+        dwt_channels=None,
+        dwt_wavelet="db4",
+        dwt_level=3,
         window_size=None,
         window_stride=None,
         include_tail_window=True,
@@ -41,6 +48,11 @@ class ToolWear1DDataset(Dataset):
         ]
         self.label_mode = label_mode
         self.impute_missing_vb = impute_missing_vb
+        self.vb_interpolation_method = vb_interpolation_method
+        self.use_dwt_denoise = use_dwt_denoise
+        self.dwt_channels = set(dwt_channels or ["smcAC", "smcDC", "vib_table", "vib_spindle"])
+        self.dwt_wavelet = dwt_wavelet
+        self.dwt_level = dwt_level
         self.window_size = window_size
         self.window_stride = window_stride or window_size
         self.include_tail_window = include_tail_window
@@ -60,7 +72,11 @@ class ToolWear1DDataset(Dataset):
 
         self.measured_vbs = measured_vbs
         if self.impute_missing_vb:
-            self.record_vbs = self._interpolate_missing_vbs(self.records, self.record_vbs)
+            self.record_vbs = self._interpolate_missing_vbs(
+                self.records,
+                self.record_vbs,
+                method=self.vb_interpolation_method,
+            )
         self.valid_vbs = [vb for vb in self.record_vbs if np.isfinite(vb)]
 
         if indices is None:
@@ -86,7 +102,7 @@ class ToolWear1DDataset(Dataset):
             return default
 
     @staticmethod
-    def _interpolate_missing_vbs(records, vbs):
+    def _interpolate_missing_vbs(records, vbs, method="linear"):
         filled = np.asarray(vbs, dtype=np.float64)
         cases = np.asarray([ToolWear1DDataset._read_scalar(record, "case", idx) for idx, record in enumerate(records)])
         runs = np.asarray([ToolWear1DDataset._read_scalar(record, "run", idx) for idx, record in enumerate(records)])
@@ -102,6 +118,12 @@ class ToolWear1DDataset(Dataset):
                 continue
             if known.sum() == 1:
                 filled[order] = case_vbs[known][0]
+            elif method == "cubic" and known.sum() >= 4:
+                spline = CubicSpline(case_runs[known], case_vbs[known], bc_type="natural", extrapolate=True)
+                interpolated = spline(case_runs)
+                min_vb = max(0.0, float(np.nanmin(case_vbs[known])))
+                max_vb = float(np.nanmax(case_vbs[known]))
+                filled[order] = np.clip(interpolated, min_vb, max_vb)
             else:
                 filled[order] = np.interp(case_runs, case_runs[known], case_vbs[known])
 
@@ -130,6 +152,26 @@ class ToolWear1DDataset(Dataset):
         values = np.clip(values, lower, upper)
         values = np.nan_to_num(values, nan=fill_value, posinf=upper, neginf=lower)
         return values.astype(np.float32)
+
+    def _dwt_denoise_signal(self, values):
+        values = np.asarray(values, dtype=np.float64).reshape(-1)
+        if values.size < 8:
+            return values.astype(np.float32)
+
+        try:
+            wavelet = pywt.Wavelet(self.dwt_wavelet)
+            max_level = pywt.dwt_max_level(values.size, wavelet.dec_len)
+            level = max(1, min(self.dwt_level, max_level))
+            coeffs = pywt.wavedec(values, wavelet=wavelet, level=level, mode="symmetric")
+            detail = coeffs[-1]
+            sigma = np.median(np.abs(detail - np.median(detail))) / 0.6745 if detail.size else 0.0
+            threshold = sigma * np.sqrt(2.0 * np.log(max(values.size, 2)))
+            filtered = [coeffs[0]]
+            filtered.extend(pywt.threshold(coef, threshold, mode="soft") for coef in coeffs[1:])
+            denoised = pywt.waverec(filtered, wavelet=wavelet, mode="symmetric")[: values.size]
+            return self._clean_signal(denoised)
+        except Exception:
+            return values.astype(np.float32)
 
     def _resolve_binary_threshold(self):
         if self.label_mode == "quantile" and len(self.valid_vbs) > 0:
@@ -180,6 +222,8 @@ class ToolWear1DDataset(Dataset):
         channels = []
         for key in self.channel_keys:
             arr = self._clean_signal(record[key])
+            if self.use_dwt_denoise and key in self.dwt_channels:
+                arr = self._dwt_denoise_signal(arr)
             if self.window_size is not None:
                 end_idx = start_idx + self.window_size
                 arr = arr[start_idx:end_idx]

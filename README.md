@@ -214,6 +214,48 @@ Classes: [0 1]
 
 该实验相比原始 run 级分类使用了更多窗口样本，协议更接近“插值补标签 + 滑窗扩增”的少样本扩充思路，但验证集定义也发生变化，因此结果不应直接和原始 30 个 run 的验证结果简单等价比较。
 
+### 1D DeepLabV3-ResNet50 分类结果：三次样条 VB 插值 + DWT + 滑窗
+
+按论文的数据处理思想，分类模型进一步加入：
+
+- `VB` 缺失值由线性插值改为三次样条插值。
+- 对电流和振动通道使用 DWT 软阈值降噪：`smcAC`、`smcDC`、`vib_table`、`vib_spindle`。
+- 继续使用 run 级划分后再滑窗，避免同一 run 的窗口泄漏到不同集合。
+
+实验设置：
+
+```text
+VB interpolation: True
+VB interpolation method: cubic
+DWT denoise: True
+DWT channels: smcAC, smcDC, vib_table, vib_spindle
+Window size: 4096
+Window stride: 2048
+Binary VB threshold: 0.380000
+训练 run: 133
+验证 run: 34
+训练窗口样本: 532
+验证窗口样本: 139
+```
+
+验证集结果：
+
+```text
+Accuracy: 0.8561
+Macro F1: 0.8475
+```
+
+混淆矩阵：
+
+```text
+Classes: [0 1]
+
+[[76 15]
+ [ 5 43]]
+```
+
+该结果低于上一版“线性 VB 插值 + 滑窗扩增”的 `Accuracy=0.8993`、`Macro F1=0.8886`。说明论文式降噪和三次样条插值并不会必然提升当前二分类网络；它主要提升了数据处理协议与论文的相似度，后续可继续比较“仅三次样条”“仅 DWT”“不同 DWT 通道”的消融实验。
+
 ### Stacked-BiLSTM + Attention 回归结果
 
 复现实验代码位于：
