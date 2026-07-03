@@ -295,6 +295,39 @@ Classes: [0 1]
 
 与同数据处理下的 `ResNet50_1D` 主干相比，LSTM 主干的 `Accuracy` 持平，`Macro F1` 从 `0.8475` 小幅下降到 `0.8409`。当前结果说明，单纯把分类模型主干换成 LSTM 没有明显提升；但误分类更均衡，后续可以尝试更轻量的 LSTM、BiLSTM、Attention pooling 或改为 VB 回归任务。
 
+### 分类样本二维降维分布
+
+为观察当前分类样本的可分性，新增二维降维可视化脚本：
+
+```text
+sample_visualizations/plot_sample_distribution_2d.py
+```
+
+该脚本使用当前分类实验的数据处理方式：
+
+```text
+VB interpolation method: cubic
+DWT denoise: True
+Window size: 4096
+Window stride: 2048
+Binary VB threshold: 0.380000
+```
+
+共生成 `671` 个窗口样本，其中低磨损类 `435` 个，高磨损类 `236` 个。脚本将每个窗口样本展平后标准化，并绘制：
+
+- PCA 2D：观察线性降维下的整体分布。
+- PCA-50 后 t-SNE 2D：观察非线性邻域结构。
+
+输出图像：
+
+```text
+sample_visualizations/sample_distribution_2d.png
+```
+
+![Sample distribution](sample_visualizations/sample_distribution_2d.png)
+
+从图中可以看到，两类样本在 PCA 空间中存在一定趋势性分离，但重叠区域仍然明显；t-SNE 中局部簇结构更清楚，但高低磨损类仍存在混叠。因此当前二分类任务不是简单线性可分，继续提升模型时需要关注特征提取、标签阈值和相邻磨损阶段的过渡样本。
+
 ### Stacked-BiLSTM + Attention 回归结果
 
 复现实验代码位于：
