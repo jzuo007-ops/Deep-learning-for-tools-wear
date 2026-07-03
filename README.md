@@ -256,6 +256,45 @@ Classes: [0 1]
 
 该结果低于上一版“线性 VB 插值 + 滑窗扩增”的 `Accuracy=0.8993`、`Macro F1=0.8886`。说明论文式降噪和三次样条插值并不会必然提升当前二分类网络；它主要提升了数据处理协议与论文的相似度，后续可继续比较“仅三次样条”“仅 DWT”“不同 DWT 通道”的消融实验。
 
+### 1D DeepLabV3-LSTM 分类结果：更换主干网络
+
+在保持“三次样条 VB 插值 + DWT + 滑窗”数据处理不变的情况下，将分类模型主干从 `ResNet50_1D` 切换为 `LSTMBackbone1D`。模型仍保留 DeepLabV3 的 ASPP 和分类头，因此本实验主要观察主干网络替换带来的影响。
+
+实验设置：
+
+```text
+Backbone: lstm
+VB interpolation: True
+VB interpolation method: cubic
+DWT denoise: True
+DWT channels: smcAC, smcDC, vib_table, vib_spindle
+Window size: 4096
+Window stride: 2048
+Binary VB threshold: 0.380000
+训练 run: 133
+验证 run: 34
+训练窗口样本: 532
+验证窗口样本: 139
+```
+
+验证集结果：
+
+```text
+Accuracy: 0.8561
+Macro F1: 0.8409
+```
+
+混淆矩阵：
+
+```text
+Classes: [0 1]
+
+[[81 10]
+ [10 38]]
+```
+
+与同数据处理下的 `ResNet50_1D` 主干相比，LSTM 主干的 `Accuracy` 持平，`Macro F1` 从 `0.8475` 小幅下降到 `0.8409`。当前结果说明，单纯把分类模型主干换成 LSTM 没有明显提升；但误分类更均衡，后续可以尝试更轻量的 LSTM、BiLSTM、Attention pooling 或改为 VB 回归任务。
+
 ### Stacked-BiLSTM + Attention 回归结果
 
 复现实验代码位于：

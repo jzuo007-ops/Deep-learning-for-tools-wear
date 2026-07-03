@@ -155,6 +155,7 @@ def main():
     seq_length = window_size
     epochs = 30
     num_classes = 2
+    backbone_name = "lstm"
 
     full_dataset = ToolWear1DDataset(
         data_root,
@@ -171,6 +172,7 @@ def main():
     print(f"VB interpolation method: {vb_interpolation_method}")
     print(f"DWT denoise: {use_dwt_denoise}")
     print(f"DWT channels: {dwt_channels}")
+    print(f"Backbone: {backbone_name}")
     print(f"Window size/stride: {window_size}/{window_stride}")
     print(f"Train/val runs: {len(train_indices)}/{len(val_indices)}")
 
@@ -246,7 +248,13 @@ def main():
         collate_fn=val_dataset.collate_fn,
     )
 
-    model = DeepLabV3_1D(in_channels=6, num_classes=num_classes, aux_loss=True, classification=True)
+    model = DeepLabV3_1D(
+        in_channels=6,
+        num_classes=num_classes,
+        aux_loss=True,
+        classification=True,
+        backbone_name=backbone_name,
+    )
     model.to(device)
 
     train_labels = np.asarray(train_dataset.labels)
@@ -295,7 +303,13 @@ def main():
                 for name, value in model.state_dict().items()
             }
 
-    final_model = DeepLabV3_1D(in_channels=6, num_classes=num_classes, aux_loss=True, classification=True)
+    final_model = DeepLabV3_1D(
+        in_channels=6,
+        num_classes=num_classes,
+        aux_loss=True,
+        classification=True,
+        backbone_name=backbone_name,
+    )
     final_model.load_state_dict(best_state_dict)
     final_model.to(device)
     final_model.eval()
@@ -311,8 +325,9 @@ def main():
     print(confusion)
 
     with open("training_results.txt", "a", encoding="utf-8") as file:
-        file.write("\n1D DeepLabV3-ResNet50 classification: cubic VB interpolation + DWT\n")
+        file.write("\n1D DeepLabV3-LSTM classification: cubic VB interpolation + DWT\n")
         file.write(f"Device: {device}\n")
+        file.write(f"Backbone: {backbone_name}\n")
         file.write(f"VB interpolation: {use_vb_interpolation}\n")
         file.write(f"VB interpolation method: {vb_interpolation_method}\n")
         file.write(f"DWT denoise: {use_dwt_denoise}\n")

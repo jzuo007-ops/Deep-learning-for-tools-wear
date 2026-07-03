@@ -104,3 +104,23 @@ Classes: [0, 1]
 Confusion matrix:
 [[76 15]
  [ 5 43]]
+
+1D DeepLabV3-LSTM classification: cubic VB interpolation + DWT
+Device: cuda:0
+Backbone: lstm
+VB interpolation: True
+VB interpolation method: cubic
+DWT denoise: True
+DWT channels: smcAC, smcDC, vib_table, vib_spindle
+Window size/stride: 4096/2048
+Binary VB threshold: 0.380000
+Train/val runs: 133/34
+Train/val window samples: 532/139
+Accuracy: 0.8561
+Macro F1: 0.8409
+Best validation Accuracy: 0.8561
+Best validation Macro F1: 0.8409
+Classes: [0, 1]
+Confusion matrix:
+[[81 10]
+ [10 38]]

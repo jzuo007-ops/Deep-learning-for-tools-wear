@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from .lstm_backbone import lstm_backbone_1d
 from .resnet_backbone import resnet50_1d
 
 
@@ -101,10 +102,24 @@ class DeepLabV3_1D(nn.Module):
     为分类任务保留原始结构，并通过时序池化得到样本级别 logits。
     """
 
-    def __init__(self, in_channels=6, num_classes=2, aux_loss=True, classification=False):
+    def __init__(
+        self,
+        in_channels=6,
+        num_classes=2,
+        aux_loss=True,
+        classification=False,
+        backbone_name="resnet50",
+    ):
         super(DeepLabV3_1D, self).__init__()
 
-        self.backbone = resnet50_1d(in_channels=in_channels)
+        self.backbone_name = backbone_name
+        if backbone_name == "resnet50":
+            self.backbone = resnet50_1d(in_channels=in_channels)
+        elif backbone_name == "lstm":
+            self.backbone = lstm_backbone_1d(in_channels=in_channels)
+        else:
+            raise ValueError(f"Unsupported backbone_name: {backbone_name}")
+
         self.aux_loss = aux_loss
         self.classification = classification
         if aux_loss:
