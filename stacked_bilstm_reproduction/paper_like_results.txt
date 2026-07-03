@@ -1,0 +1,28 @@
+Paper-like PMS experiment results
+=================================
+
+Device: cuda:0
+Max iterations: 1500
+Learning rate: 0.012
+Batch size: 15
+Train ratio: 0.8
+
+Case 11 / E1
+- Valid runs: 20
+- Augmented segments: 100
+- Sequences: 96
+- Split sizes: {'train': 77, 'test': 19}
+- MAE: 0.073472 mm (73.47 um)
+- RMSE: 0.117173 mm (117.17 um)
+- R2: 0.775545
+- MAPE: 51.35%
+
+Case 2 / E2
+- Valid runs: 13
+- Augmented segments: 104
+- Sequences: 100
+- Split sizes: {'train': 80, 'test': 20}
+- MAE: 0.020720 mm (20.72 um)
+- RMSE: 0.024198 mm (24.20 um)
+- R2: 0.943080
+- MAPE: 11.12%

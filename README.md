@@ -276,11 +276,69 @@ R2: 0.8644
 MAPE: 24.18%
 ```
 
+#### 论文口径 PMS 实验：Case 11 / Case 2
+
+为进一步贴近 PDF 中的实验设置，新增了独立脚本：
+
+```text
+stacked_bilstm_reproduction/paper_like_pms_experiment.py
+```
+
+该脚本按论文表述做了以下处理：
+
+- 只使用论文报告的两个工况：`Case 11` 作为 E1，`Case 2` 作为 E2。
+- `Case 11` 使用 20 个有效 VB run，按每 run 5 段扩增为 100 个片段。
+- `Case 2` 使用 13 个有效 VB run，按每 run 8 段扩增为 104 个片段。
+- 对 VB 做三次样条插值，使扩增片段具有连续磨损标签。
+- 从电流信号和振动信号分别提取 12 个时频特征，总输入为 24 个特征。
+- 使用 DWT 软阈值降噪、LOWESS 局部加权平滑，以及 `PRes-MHSA-SBiLSTM` 风格回归模型。
+- 使用论文中的 80% / 20% 随机划分、`Adam`、初始学习率 `0.012`、学习率衰减因子 `0.892`、最大迭代 `1500`、batch size `15`。
+
+运行命令：
+
+```powershell
+& 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' stacked_bilstm_reproduction\paper_like_pms_experiment.py --data-root '3. Milling'
+```
+
+本次实验结果已记录在：
+
+```text
+stacked_bilstm_reproduction/paper_like_results.txt
+```
+
+测试集结果：
+
+```text
+Case 11 / E1:
+MAE: 0.073472 mm (73.47 um)
+RMSE: 0.117173 mm (117.17 um)
+R2: 0.775545
+MAPE: 51.35%
+
+Case 2 / E2:
+MAE: 0.020720 mm (20.72 um)
+RMSE: 0.024198 mm (24.20 um)
+R2: 0.943080
+MAPE: 11.12%
+```
+
+与论文表 6 的 PMS 结果相比：
+
+```text
+论文 E1 / Case 11: RMSE 7.7 um, MAE 6.3 um
+当前 E1 / Case 11: RMSE 117.17 um, MAE 73.47 um
+
+论文 E2 / Case 2:  RMSE 10.5 um, MAE 8.2 um
+当前 E2 / Case 2:  RMSE 24.20 um, MAE 20.72 um
+```
+
+当前仍未完全复现论文结果，主要差异包括：当前环境未安装 EMD 库，因此振动信号尚未执行论文中的 EMD 分解；论文未公开随机划分 seed、具体所选电流/振动通道、网络层数细节和 LOWESS 参数，小样本随机划分对结果影响较大。
+
 ### 结果说明
 
 分类实验中的 1D DeepLabV3-ResNet50 在当前二分类验证集上表现较好，`Accuracy` 达到 `0.9333`，`Macro F1` 达到 `0.9282`。
 
-回归实验中，`random_run` 更能反映模型对未见 run 的泛化能力；`random` 则更接近窗口级随机划分，结果更高，但需要在论文或报告中说明其划分方式。
+回归实验中，`random_run` 更能反映模型对未见 run 的泛化能力；`random` 则更接近窗口级随机划分，结果更高，但需要在论文或报告中说明其划分方式。论文口径 PMS 实验已经把数据集范围、样本扩增方式、训练比例和超参数向论文靠齐，但由于 EMD 和若干未公开细节仍不一致，当前结果只能作为进一步逼近的实验基线。
 
 ## Stacked-BiLSTM 少样本复现实验
 
@@ -290,6 +348,7 @@ MAPE: 24.18%
 - 原始信号分段
 - 每个信号片段提取统计特征
 - Stacked-BiLSTM + Attention
+- PRes-MHSA-SBiLSTM 风格论文口径实验
 - 连续 VB 回归预测
 - MAE、RMSE、R2、MAPE 指标
 
@@ -297,6 +356,12 @@ MAPE: 24.18%
 
 ```powershell
 & 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' stacked_bilstm_reproduction\train_stacked_bilstm.py --data-root '3. Milling'
+```
+
+论文口径 PMS 实验：
+
+```powershell
+& 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' stacked_bilstm_reproduction\paper_like_pms_experiment.py --data-root '3. Milling'
 ```
 
 批量少样本比例实验：
