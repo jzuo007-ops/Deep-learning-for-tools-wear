@@ -23,7 +23,7 @@ ae_energy    = abs(AE)
 score        = normalized force + normalized vibration + normalized AE
 ```
 
-The longest high-activity region is treated as the machining region. Its beginning and ending parts are labeled as `transition`, and the middle part is labeled as `stable_cutting`.
+The updated pseudo-label rule uses hysteresis-style cutting-region detection instead of only taking the longest high-activity fragment. It first finds high-confidence cutting activity, expands through lower-confidence but still active signal, fills short gaps inside the same operation, then labels only the beginning and ending portions as `transition`. This avoids marking the early part of a continuous machining waveform as `non_cutting` just because the activity score has local valleys.
 
 ## Files
 
@@ -56,6 +56,8 @@ Then use a tiny subset to verify the training pipeline:
 ```
 
 The training script now requires cached labels by default. If the cache is missing, it stops and asks you to run `build_label_cache.py`. This prevents every training run from repeatedly pseudo-labeling the same CSV files.
+
+If you change pseudo-label parameters such as `--inactive-threshold`, `--max-gap-ratio`, or `--transition-ratio`, rebuild the label cache with `--overwrite` before training. The cache stores a parameter fingerprint, so stale labels are rejected by default.
 
 ## Remote Training
 
@@ -111,3 +113,12 @@ gray:   non_cutting
 yellow: transition
 green:  stable_cutting
 ```
+
+## Label Rule Update Log
+
+2026-07-05:
+
+- Problem observed: the earlier longest-high-activity rule marked a large early section of `c1/c_1_001.csv` as `non_cutting`, even though the waveform visually remained in a continuous cutting state.
+- Change made: replaced longest-fragment selection with hysteresis-style continuous cutting-region detection. The rule now uses `active_threshold` for confident activity, `inactive_threshold` for lower-confidence continuation, fills short gaps with `max_gap_ratio`, and only marks the first/last `transition_ratio` of the detected operation as transition.
+- Debug result on `PHM 2010/c1/c_1_001.csv`: `active_start=0`, `active_end=127399`, `transition_len=6370`, with 12,740 transition points and 114,659 stable-cutting points.
+- Debug command passed: `train_deeplabv3_segmentation.py --fold c1 --epochs 0 --max-cuts-per-tool 1 --crop-length 2048 --batch-size 1 --cpu`.

@@ -21,9 +21,13 @@ CLASS_COLORS = {
 class PseudoLabelConfig:
     smooth_window: int = 2048
     active_threshold: float = 0.25
+    inactive_threshold: float = 0.12
     transition_ratio: float = 0.05
     min_transition_points: int = 4096
     min_active_points: int = 8192
+    min_cut_ratio: float = 0.35
+    max_gap_ratio: float = 0.20
+    edge_margin_ratio: float = 0.01
 
 
 def moving_average(values: np.ndarray, window: int) -> np.ndarray:
@@ -74,17 +78,88 @@ def _longest_true_region(mask: np.ndarray) -> Tuple[int, int]:
     return int(starts[best]), int(ends[best])
 
 
+def _fill_short_false_gaps(mask: np.ndarray, max_gap: int) -> np.ndarray:
+    mask = np.asarray(mask, dtype=bool).copy()
+    if max_gap <= 0 or mask.size == 0:
+        return mask
+
+    padded = np.pad(mask.astype(np.int8), (1, 1), mode="constant", constant_values=1)
+    changes = np.diff(padded)
+    starts = np.where(changes == -1)[0]
+    ends = np.where(changes == 1)[0]
+    for start, end in zip(starts, ends):
+        if end - start <= max_gap:
+            mask[start:end] = True
+    return mask
+
+
+def _remove_short_edge_regions(mask: np.ndarray, edge_margin: int) -> np.ndarray:
+    mask = np.asarray(mask, dtype=bool).copy()
+    if edge_margin <= 0 or mask.size == 0:
+        return mask
+
+    padded = np.pad(mask.astype(np.int8), (1, 1), mode="constant")
+    changes = np.diff(padded)
+    starts = np.where(changes == 1)[0]
+    ends = np.where(changes == -1)[0]
+    for start, end in zip(starts, ends):
+        touches_left = start <= edge_margin
+        touches_right = end >= len(mask) - edge_margin
+        if (touches_left or touches_right) and end - start <= edge_margin:
+            mask[start:end] = False
+    return mask
+
+
+def detect_cutting_region(score: np.ndarray, config: PseudoLabelConfig) -> Tuple[int, int, np.ndarray]:
+    score = np.asarray(score, dtype=np.float64).reshape(-1)
+    n_points = len(score)
+    if n_points == 0:
+        return 0, 0, np.zeros(0, dtype=bool)
+
+    high_mask = score >= config.active_threshold
+    low_mask = score >= config.inactive_threshold
+    if not high_mask.any():
+        low_mask = score >= np.percentile(score, 35)
+
+    max_gap = max(config.min_transition_points, int(round(n_points * config.max_gap_ratio)))
+    candidate_mask = _fill_short_false_gaps(low_mask, max_gap=max_gap)
+    candidate_mask = _remove_short_edge_regions(
+        candidate_mask,
+        edge_margin=int(round(n_points * config.edge_margin_ratio)),
+    )
+
+    if high_mask.any():
+        high_start, high_end = _longest_true_region(high_mask)
+        true_indices = np.where(candidate_mask)[0]
+        if true_indices.size:
+            before = true_indices[true_indices <= high_start]
+            after = true_indices[true_indices >= high_end - 1]
+            active_start = int(before[0]) if before.size else int(true_indices[0])
+            active_end = int(after[-1]) + 1 if after.size else int(true_indices[-1]) + 1
+        else:
+            active_start, active_end = high_start, high_end
+    else:
+        true_indices = np.where(candidate_mask)[0]
+        active_start = int(true_indices[0]) if true_indices.size else 0
+        active_end = int(true_indices[-1]) + 1 if true_indices.size else n_points
+
+    active_len = active_end - active_start
+    min_cut_points = max(config.min_active_points, int(round(n_points * config.min_cut_ratio)))
+    if active_len < min_cut_points:
+        active_start, active_end = 0, n_points
+
+    active_mask = np.zeros(n_points, dtype=bool)
+    active_mask[active_start:active_end] = True
+    return active_start, active_end, active_mask
+
+
 def generate_three_class_labels(
     data: np.ndarray,
     config: PseudoLabelConfig | None = None,
 ) -> Tuple[np.ndarray, np.ndarray, Dict[str, int]]:
     config = config or PseudoLabelConfig()
     score = compute_activity_score(data, smooth_window=config.smooth_window)
-    active_mask = score >= config.active_threshold
-    active_start, active_end = _longest_true_region(active_mask)
-
-    if active_end - active_start < config.min_active_points:
-        active_start, active_end = 0, len(score)
+    active_start, active_end, active_mask = detect_cutting_region(score, config)
 
     labels = np.zeros(len(score), dtype=np.int64)
     active_len = active_end - active_start
@@ -105,6 +180,10 @@ def generate_three_class_labels(
         "active_end": int(active_end),
         "transition_len": int(transition_len),
         "n_points": int(len(score)),
+        "active_points": int(active_mask.sum()),
+        "active_threshold": float(config.active_threshold),
+        "inactive_threshold": float(config.inactive_threshold),
+        "max_gap_ratio": float(config.max_gap_ratio),
     }
     return labels, score.astype(np.float32), metadata
 

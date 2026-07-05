@@ -83,9 +83,13 @@ def parse_args():
     parser.add_argument("--crop-length", type=int, default=8192)
     parser.add_argument("--smooth-window", type=int, default=2048)
     parser.add_argument("--active-threshold", type=float, default=0.25)
+    parser.add_argument("--inactive-threshold", type=float, default=0.12)
     parser.add_argument("--transition-ratio", type=float, default=0.05)
     parser.add_argument("--min-transition-points", type=int, default=4096)
     parser.add_argument("--min-active-points", type=int, default=8192)
+    parser.add_argument("--min-cut-ratio", type=float, default=0.35)
+    parser.add_argument("--max-gap-ratio", type=float, default=0.20)
+    parser.add_argument("--edge-margin-ratio", type=float, default=0.01)
     parser.add_argument("--allow-label-cache-config-mismatch", action="store_true")
     parser.add_argument("--max-plot-points", type=int, default=30000)
     parser.add_argument("--cpu", action="store_true")
@@ -102,9 +106,13 @@ def main():
     config = PseudoLabelConfig(
         smooth_window=args.smooth_window,
         active_threshold=args.active_threshold,
+        inactive_threshold=args.inactive_threshold,
         transition_ratio=args.transition_ratio,
         min_transition_points=args.min_transition_points,
         min_active_points=args.min_active_points,
+        min_cut_ratio=args.min_cut_ratio,
+        max_gap_ratio=args.max_gap_ratio,
+        edge_margin_ratio=args.edge_margin_ratio,
     )
     cache_path = cache_path_for_cut(path, args.data_root, args.label_cache_dir)
     if cache_path.exists():

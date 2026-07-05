@@ -12,9 +12,13 @@ def config_to_dict(config: PseudoLabelConfig) -> dict[str, Any]:
     return {
         "smooth_window": int(config.smooth_window),
         "active_threshold": float(config.active_threshold),
+        "inactive_threshold": float(config.inactive_threshold),
         "transition_ratio": float(config.transition_ratio),
         "min_transition_points": int(config.min_transition_points),
         "min_active_points": int(config.min_active_points),
+        "min_cut_ratio": float(config.min_cut_ratio),
+        "max_gap_ratio": float(config.max_gap_ratio),
+        "edge_margin_ratio": float(config.edge_margin_ratio),
     }
 
 
