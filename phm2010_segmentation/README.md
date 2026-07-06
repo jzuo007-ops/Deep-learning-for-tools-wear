@@ -150,3 +150,18 @@ green:  stable_cutting
 - Summary table: `phm2010_segmentation/outputs/label_samples/label_samples_summary.csv`.
 - Average label ratio over the 24 inspected cuts: `non_cutting = 0.00%`, `transition = 10.00%`, `stable_cutting = 90.00%`.
 - Interpretation: the current pseudo-label rule identifies almost every complete cut as active from `active_start = 0` to `active_end = n_points`. Therefore it does not provide meaningful `non_cutting` samples. The `transition` class is mostly a fixed 5% entry and 5% exit band, not a truly learned boundary from signal changes. This confirms that the weak point is the label definition, not only the segmentation network.
+
+2026-07-06 pseudo-label rule correction:
+
+- Problem found from `c1_315_labels.png`: after about 218k samples, the waveform and activity score clearly drop into a stopped/non-cutting state, but the old rule still labeled it as active because `max_gap_ratio = 0.20` allowed a very long low-activity interval to be filled.
+- Change made: active-region detection now selects the continuous low-threshold region that overlaps the main high-confidence cutting segment. The allowed gap fill was tightened to `max_gap_ratio = 0.03` and `max_gap_points = 8192`.
+- New `c1/c_1_315.csv` result: `active_start = 0`, `active_end = 218305`, `n_points = 252492`, so the final 34,187 points are now labeled `non_cutting`.
+- Re-visualized 24 cuts under `phm2010_segmentation/outputs/label_samples_v2/`.
+- V2 contact sheet: `phm2010_segmentation/outputs/label_samples_v2/label_samples_v2_contact_sheet.jpg`.
+- V2 summary table: `phm2010_segmentation/outputs/label_samples_v2/label_samples_v2_summary.csv`.
+- V2 average label ratio over the same 24 inspected cuts: `non_cutting = 0.56%`, `transition = 9.94%`, `stable_cutting = 89.49%`. Among the inspected samples, only `c1_315` contains a clear non-cutting tail.
+- Important: because the pseudo-label parameters changed, rebuild the full label cache before any new training run:
+
+```powershell
+& 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' phm2010_segmentation\build_label_cache.py --tools all --overwrite
+```

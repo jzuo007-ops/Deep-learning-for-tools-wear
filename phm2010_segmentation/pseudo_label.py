@@ -26,7 +26,8 @@ class PseudoLabelConfig:
     min_transition_points: int = 4096
     min_active_points: int = 8192
     min_cut_ratio: float = 0.35
-    max_gap_ratio: float = 0.20
+    max_gap_ratio: float = 0.03
+    max_gap_points: int = 8192
     edge_margin_ratio: float = 0.01
 
 
@@ -110,6 +111,26 @@ def _remove_short_edge_regions(mask: np.ndarray, edge_margin: int) -> np.ndarray
     return mask
 
 
+def _true_regions(mask: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    mask = np.asarray(mask, dtype=bool)
+    padded = np.pad(mask.astype(np.int8), (1, 1), mode="constant")
+    changes = np.diff(padded)
+    starts = np.where(changes == 1)[0]
+    ends = np.where(changes == -1)[0]
+    return starts, ends
+
+
+def _region_overlapping(starts: np.ndarray, ends: np.ndarray, start: int, end: int) -> Tuple[int, int] | None:
+    best_region = None
+    best_overlap = 0
+    for region_start, region_end in zip(starts, ends):
+        overlap = max(0, min(int(region_end), end) - max(int(region_start), start))
+        if overlap > best_overlap:
+            best_overlap = overlap
+            best_region = (int(region_start), int(region_end))
+    return best_region
+
+
 def detect_cutting_region(score: np.ndarray, config: PseudoLabelConfig) -> Tuple[int, int, np.ndarray]:
     score = np.asarray(score, dtype=np.float64).reshape(-1)
     n_points = len(score)
@@ -121,7 +142,10 @@ def detect_cutting_region(score: np.ndarray, config: PseudoLabelConfig) -> Tuple
     if not high_mask.any():
         low_mask = score >= np.percentile(score, 35)
 
-    max_gap = max(config.min_transition_points, int(round(n_points * config.max_gap_ratio)))
+    max_gap = max(
+        config.min_transition_points,
+        min(config.max_gap_points, int(round(n_points * config.max_gap_ratio))),
+    )
     candidate_mask = _fill_short_false_gaps(low_mask, max_gap=max_gap)
     candidate_mask = _remove_short_edge_regions(
         candidate_mask,
@@ -130,14 +154,12 @@ def detect_cutting_region(score: np.ndarray, config: PseudoLabelConfig) -> Tuple
 
     if high_mask.any():
         high_start, high_end = _longest_true_region(high_mask)
-        true_indices = np.where(candidate_mask)[0]
-        if true_indices.size:
-            before = true_indices[true_indices <= high_start]
-            after = true_indices[true_indices >= high_end - 1]
-            active_start = int(before[0]) if before.size else int(true_indices[0])
-            active_end = int(after[-1]) + 1 if after.size else int(true_indices[-1]) + 1
-        else:
+        starts, ends = _true_regions(candidate_mask)
+        active_region = _region_overlapping(starts, ends, high_start, high_end)
+        if active_region is None:
             active_start, active_end = high_start, high_end
+        else:
+            active_start, active_end = active_region
     else:
         true_indices = np.where(candidate_mask)[0]
         active_start = int(true_indices[0]) if true_indices.size else 0
@@ -184,6 +206,7 @@ def generate_three_class_labels(
         "active_threshold": float(config.active_threshold),
         "inactive_threshold": float(config.inactive_threshold),
         "max_gap_ratio": float(config.max_gap_ratio),
+        "max_gap_points": int(config.max_gap_points),
     }
     return labels, score.astype(np.float32), metadata
 

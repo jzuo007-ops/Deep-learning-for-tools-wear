@@ -18,6 +18,7 @@ def config_to_dict(config: PseudoLabelConfig) -> dict[str, Any]:
         "min_active_points": int(config.min_active_points),
         "min_cut_ratio": float(config.min_cut_ratio),
         "max_gap_ratio": float(config.max_gap_ratio),
+        "max_gap_points": int(config.max_gap_points),
         "edge_margin_ratio": float(config.edge_margin_ratio),
     }
 

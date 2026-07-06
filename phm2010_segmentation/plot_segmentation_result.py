@@ -88,7 +88,8 @@ def parse_args():
     parser.add_argument("--min-transition-points", type=int, default=4096)
     parser.add_argument("--min-active-points", type=int, default=8192)
     parser.add_argument("--min-cut-ratio", type=float, default=0.35)
-    parser.add_argument("--max-gap-ratio", type=float, default=0.20)
+    parser.add_argument("--max-gap-ratio", type=float, default=0.03)
+    parser.add_argument("--max-gap-points", type=int, default=8192)
     parser.add_argument("--edge-margin-ratio", type=float, default=0.01)
     parser.add_argument("--allow-label-cache-config-mismatch", action="store_true")
     parser.add_argument("--max-plot-points", type=int, default=30000)
@@ -112,6 +113,7 @@ def main():
         min_active_points=args.min_active_points,
         min_cut_ratio=args.min_cut_ratio,
         max_gap_ratio=args.max_gap_ratio,
+        max_gap_points=args.max_gap_points,
         edge_margin_ratio=args.edge_margin_ratio,
     )
     cache_path = cache_path_for_cut(path, args.data_root, args.label_cache_dir)
