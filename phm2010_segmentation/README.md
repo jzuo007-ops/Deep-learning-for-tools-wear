@@ -2,7 +2,7 @@
 
 This folder contains the first version of a PHM 2010 process-state segmentation pipeline.
 
-The goal is not to predict tool wear directly. The goal is to train a 1D DeepLabV3 model to identify useful cutting states in each complete machining waveform, then pass stable-cutting segments to a VB regression model such as CNN-BiLSTM-Attention.
+The goal is not to predict tool wear directly. The goal is to train a 1D process-state segmentation model to identify useful cutting states in each complete machining waveform, then pass stable-cutting segments to a VB regression model such as CNN-BiLSTM-Attention.
 
 ## Classes
 
@@ -32,7 +32,7 @@ The updated pseudo-label rule uses hysteresis-style cutting-region detection ins
 - `label_cache.py`: cache path, save, load, and config-check helpers.
 - `dataset.py`: PHM 2010 segmentation dataset with random crops.
 - `metrics.py`: point accuracy, mIoU, macro F1, and per-class metrics.
-- `train_deeplabv3_segmentation.py`: 1D DeepLabV3 training and six-tool cross validation.
+- `train_process_state_segmentation.py`: process-state segmentation training and six-tool cross validation.
 - `plot_segmentation_result.py`: draws complete waveforms with colored pseudo-label or prediction regions.
 
 ## Debug Run
@@ -52,7 +52,7 @@ For a quick local check, build one cut per tool:
 Then use a tiny subset to verify the training pipeline:
 
 ```powershell
-& 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' phm2010_segmentation\train_deeplabv3_segmentation.py --fold c1 --epochs 0 --max-cuts-per-tool 1 --crop-length 2048 --batch-size 1 --cpu
+& 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' phm2010_segmentation\train_process_state_segmentation.py --fold c1 --epochs 0 --max-cuts-per-tool 1 --crop-length 2048 --batch-size 1 --cpu
 ```
 
 The training script now requires cached labels by default. If the cache is missing, it stops and asks you to run `build_label_cache.py`. This prevents every training run from repeatedly pseudo-labeling the same CSV files.
@@ -65,23 +65,23 @@ Run one fold:
 
 ```powershell
 & 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' phm2010_segmentation\build_label_cache.py --tools all
-& 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' phm2010_segmentation\train_deeplabv3_segmentation.py --fold c1 --epochs 30 --batch-size 4 --crop-length 8192
+& 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' phm2010_segmentation\train_process_state_segmentation.py --fold c1 --epochs 30 --batch-size 4 --crop-length 8192
 ```
 
 Switch the segmentation backbone:
 
 ```powershell
-& 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' phm2010_segmentation\train_deeplabv3_segmentation.py --model deeplabv3_1d --fold c1
-& 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' phm2010_segmentation\train_deeplabv3_segmentation.py --model unet_1d --fold c1
-& 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' phm2010_segmentation\train_deeplabv3_segmentation.py --model tcn_seg --fold c1
-& 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' phm2010_segmentation\train_deeplabv3_segmentation.py --model bilstm_seg --fold c1
+& 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' phm2010_segmentation\train_process_state_segmentation.py --model deeplabv3_1d --fold c1
+& 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' phm2010_segmentation\train_process_state_segmentation.py --model unet_1d --fold c1
+& 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' phm2010_segmentation\train_process_state_segmentation.py --model tcn_seg --fold c1
+& 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' phm2010_segmentation\train_process_state_segmentation.py --model bilstm_seg --fold c1
 ```
 
 Run six folds:
 
 ```powershell
 & 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' phm2010_segmentation\build_label_cache.py --tools all
-& 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' phm2010_segmentation\train_deeplabv3_segmentation.py --fold all --epochs 30 --batch-size 4 --crop-length 8192 --save-checkpoint
+& 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' phm2010_segmentation\train_process_state_segmentation.py --fold all --epochs 30 --batch-size 4 --crop-length 8192 --save-checkpoint
 ```
 
 For each fold, one tool is used as test data, the next tool is used as validation data, and the remaining four tools are used for training. Example:
@@ -130,4 +130,4 @@ green:  stable_cutting
 - Problem observed: the earlier longest-high-activity rule marked a large early section of `c1/c_1_001.csv` as `non_cutting`, even though the waveform visually remained in a continuous cutting state.
 - Change made: replaced longest-fragment selection with hysteresis-style continuous cutting-region detection. The rule now uses `active_threshold` for confident activity, `inactive_threshold` for lower-confidence continuation, fills short gaps with `max_gap_ratio`, and only marks the first/last `transition_ratio` of the detected operation as transition.
 - Debug result on `PHM 2010/c1/c_1_001.csv`: `active_start=0`, `active_end=127399`, `transition_len=6370`, with 12,740 transition points and 114,659 stable-cutting points.
-- Debug command passed: `train_deeplabv3_segmentation.py --fold c1 --epochs 0 --max-cuts-per-tool 1 --crop-length 2048 --batch-size 1 --cpu`.
+- Debug command passed: `train_process_state_segmentation.py --fold c1 --epochs 0 --max-cuts-per-tool 1 --crop-length 2048 --batch-size 1 --cpu`.

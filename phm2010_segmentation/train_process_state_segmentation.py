@@ -176,7 +176,7 @@ def run_fold(args, test_tool: str):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="PHM 2010 pseudo-label 1D DeepLabV3 segmentation.")
+    parser = argparse.ArgumentParser(description="PHM 2010 process-state segmentation training.")
     parser.add_argument("--data-root", default=str(ROOT / "PHM 2010"))
     parser.add_argument("--output-dir", default=str(CURRENT_DIR / "outputs"))
     parser.add_argument("--label-cache-dir", default=str(CURRENT_DIR / "label_cache"))
