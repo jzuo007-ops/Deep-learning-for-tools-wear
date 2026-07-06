@@ -103,6 +103,20 @@ Plot rule-based pseudo labels on a complete cut:
 
 If a cached label exists, the plotting script reads it; otherwise it generates labels only for that one figure.
 
+Randomly audit multiple pseudo-labeled cuts:
+
+```powershell
+& 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' phm2010_segmentation\plot_random_label_samples.py --samples 24
+```
+
+Use a fixed seed to reproduce the same random set:
+
+```powershell
+& 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' phm2010_segmentation\plot_random_label_samples.py --samples 24 --seed 42
+```
+
+Each run creates a new folder under `phm2010_segmentation/outputs/random_label_samples/` with individual plots, JSON metadata, `random_label_samples_summary.csv`, and a contact-sheet overview image. This script always uses the current pseudo-label rule directly, rather than reading label cache files.
+
 Plot model predictions after training:
 
 ```powershell
