@@ -131,3 +131,13 @@ green:  stable_cutting
 - Change made: replaced longest-fragment selection with hysteresis-style continuous cutting-region detection. The rule now uses `active_threshold` for confident activity, `inactive_threshold` for lower-confidence continuation, fills short gaps with `max_gap_ratio`, and only marks the first/last `transition_ratio` of the detected operation as transition.
 - Debug result on `PHM 2010/c1/c_1_001.csv`: `active_start=0`, `active_end=127399`, `transition_len=6370`, with 12,740 transition points and 114,659 stable-cutting points.
 - Debug command passed: `train_process_state_segmentation.py --fold c1 --epochs 0 --max-cuts-per-tool 1 --crop-length 2048 --batch-size 1 --cpu`.
+
+## Experiment Result Log
+
+2026-07-06 process-state segmentation outputs:
+
+- Result files inspected: `phm2010_segmentation/outputs/cross_validation_summary.json` and `fold_c1` to `fold_c6` training logs.
+- Six-fold validation metrics: point accuracy = 1.0000, mean IoU = 0.3333, macro F1 = 0.3333.
+- Six-fold test metrics: point accuracy = 1.0000, mean IoU = 0.3333, macro F1 = 0.3333.
+- Per-class test F1 average: `non_cutting = 0.0000`, `transition = 0.0000`, `stable_cutting = 1.0000`.
+- Interpretation: this result should not be treated as a valid three-class segmentation result. The current validation/test pipeline uses fixed center crops, and those windows are almost entirely `stable_cutting`. The model can therefore obtain perfect point accuracy by predicting only class 2. The next version should evaluate full waveforms or sample windows that deliberately include entry and exit transition regions.
