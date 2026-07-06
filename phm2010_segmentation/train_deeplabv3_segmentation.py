@@ -21,7 +21,7 @@ from phm2010_segmentation.dataset import (
 )
 from phm2010_segmentation.metrics import confusion_matrix_1d, segmentation_metrics_from_confusion
 from phm2010_segmentation.pseudo_label import CLASS_NAMES, PseudoLabelConfig
-from src.deeplabv3_model import DeepLabV3_1D
+from src.segmentation_factory import SEGMENTATION_MODEL_NAMES, build_segmentation_model
 
 
 CURRENT_DIR = Path(__file__).resolve().parent
@@ -100,11 +100,11 @@ def run_fold(args, test_tool: str):
     val_loader = make_loader(args, val_tools, train=False)
     test_loader = make_loader(args, test_tools, train=False)
 
-    model = DeepLabV3_1D(
+    model = build_segmentation_model(
+        name=args.model,
         in_channels=7,
         num_classes=3,
         aux_loss=True,
-        classification=False,
         backbone_name=args.backbone,
     ).to(device)
     class_weights = torch.tensor(args.class_weights, dtype=torch.float32, device=device)
@@ -186,6 +186,7 @@ def parse_args():
     parser.add_argument("--crop-length", type=int, default=8192)
     parser.add_argument("--max-cuts-per-tool", type=int, default=None)
     parser.add_argument("--num-workers", type=int, default=0)
+    parser.add_argument("--model", default="deeplabv3_1d", choices=list(SEGMENTATION_MODEL_NAMES))
     parser.add_argument("--backbone", default="resnet50", choices=["resnet50", "lstm"])
     parser.add_argument("--lr", type=float, default=5e-4)
     parser.add_argument("--weight-decay", type=float, default=1e-4)

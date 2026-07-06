@@ -68,6 +68,15 @@ Run one fold:
 & 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' phm2010_segmentation\train_deeplabv3_segmentation.py --fold c1 --epochs 30 --batch-size 4 --crop-length 8192
 ```
 
+Switch the segmentation backbone:
+
+```powershell
+& 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' phm2010_segmentation\train_deeplabv3_segmentation.py --model deeplabv3_1d --fold c1
+& 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' phm2010_segmentation\train_deeplabv3_segmentation.py --model unet_1d --fold c1
+& 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' phm2010_segmentation\train_deeplabv3_segmentation.py --model tcn_seg --fold c1
+& 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' phm2010_segmentation\train_deeplabv3_segmentation.py --model bilstm_seg --fold c1
+```
+
 Run six folds:
 
 ```powershell
