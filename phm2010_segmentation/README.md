@@ -141,3 +141,12 @@ green:  stable_cutting
 - Six-fold test metrics: point accuracy = 1.0000, mean IoU = 0.3333, macro F1 = 0.3333.
 - Per-class test F1 average: `non_cutting = 0.0000`, `transition = 0.0000`, `stable_cutting = 1.0000`.
 - Interpretation: this result should not be treated as a valid three-class segmentation result. The current validation/test pipeline uses fixed center crops, and those windows are almost entirely `stable_cutting`. The model can therefore obtain perfect point accuracy by predicting only class 2. The next version should evaluate full waveforms or sample windows that deliberately include entry and exit transition regions.
+
+2026-07-06 pseudo-label visualization audit:
+
+- Visualized 24 labeled cuts: `c1` to `c6`, each with cuts `001`, `105`, `210`, and `315`.
+- Output directory: `phm2010_segmentation/outputs/label_samples/`.
+- Contact sheet: `phm2010_segmentation/outputs/label_samples/label_samples_contact_sheet.jpg`.
+- Summary table: `phm2010_segmentation/outputs/label_samples/label_samples_summary.csv`.
+- Average label ratio over the 24 inspected cuts: `non_cutting = 0.00%`, `transition = 10.00%`, `stable_cutting = 90.00%`.
+- Interpretation: the current pseudo-label rule identifies almost every complete cut as active from `active_start = 0` to `active_end = n_points`. Therefore it does not provide meaningful `non_cutting` samples. The `transition` class is mostly a fixed 5% entry and 5% exit band, not a truly learned boundary from signal changes. This confirms that the weak point is the label definition, not only the segmentation network.
