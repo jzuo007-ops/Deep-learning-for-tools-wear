@@ -1,0 +1,15 @@
+cut_file,reason,source_non_cutting_percent
+c1\c_1_156.csv,non_cutting_candidate_or_pseudo_label_error,55.393586
+c5\c_5_148.csv,non_cutting_candidate_or_pseudo_label_error,54.882241
+c5\c_5_152.csv,non_cutting_candidate_or_pseudo_label_error,54.058427
+c2\c_2_022.csv,non_cutting_candidate_or_pseudo_label_error,29.940823
+c2\c_2_023.csv,non_cutting_candidate_or_pseudo_label_error,27.69979
+c1\c_1_309.csv,non_cutting_candidate_or_pseudo_label_error,14.080213
+c1\c_1_305.csv,non_cutting_candidate_or_pseudo_label_error,14.034062
+c1\c_1_315.csv,non_cutting_candidate_or_pseudo_label_error,13.539835
+c1\c_1_308.csv,non_cutting_candidate_or_pseudo_label_error,5.247267
+c1\c_1_304.csv,non_cutting_candidate_or_pseudo_label_error,4.27737
+c4\c_4_081.csv,non_cutting_candidate_or_pseudo_label_error,3.678771
+c4\c_4_265.csv,non_cutting_candidate_or_pseudo_label_error,3.617642
+c4\c_4_293.csv,non_cutting_candidate_or_pseudo_label_error,3.431315
+c4\c_4_198.csv,non_cutting_candidate_or_pseudo_label_error,3.26645

@@ -84,6 +84,20 @@ Run six folds:
 & 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' phm2010_segmentation\train_process_state_segmentation.py --fold all --epochs 30 --batch-size 4 --crop-length 8192 --save-checkpoint
 ```
 
+Run binary segmentation after excluding unreliable `non_cutting` candidates:
+
+```powershell
+& 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' phm2010_segmentation\build_label_cache.py --tools all
+& 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' phm2010_segmentation\train_process_state_segmentation.py --task binary --exclude-samples-csv phm2010_segmentation\config\non_cutting_exclude_samples.csv --fold all --epochs 30 --batch-size 4 --crop-length 8192 --save-checkpoint
+```
+
+Binary classes:
+
+```text
+0: transition
+1: stable_cutting
+```
+
 For each fold, one tool is used as test data, the next tool is used as validation data, and the remaining four tools are used for training. Example:
 
 ```text
@@ -167,6 +181,15 @@ green:  stable_cutting
 - Debug command passed: `train_process_state_segmentation.py --fold c1 --epochs 0 --max-cuts-per-tool 1 --crop-length 2048 --batch-size 1 --cpu`.
 
 ## Experiment Result Log
+
+2026-07-08 binary segmentation after excluding non-cutting candidates:
+
+- Remote scan result: `phm2010_segmentation/outputs/non_cutting_samples/current_non_cutting_scan/non_cutting_samples.csv` found 14 candidates with `non_cutting` labels among 1,890 PHM2010 cuts.
+- Visual interpretation: several high-ratio candidates, such as `c1/c_1_156.csv`, appear to be pseudo-label failures rather than reliable non-cutting samples.
+- Decision: do not train a three-class model with this unreliable and sparse `non_cutting` class for now.
+- Added tracked exclusion list: `phm2010_segmentation/config/non_cutting_exclude_samples.csv`.
+- Added binary training mode: `--task binary` maps original `transition` to class 0 and `stable_cutting` to class 1, while removing cuts listed in `--exclude-samples-csv`.
+- Debug command passed: `train_process_state_segmentation.py --task binary --exclude-samples-csv phm2010_segmentation\config\non_cutting_exclude_samples.csv --model tcn_seg --fold c1 --epochs 0 --max-cuts-per-tool 1 --crop-length 2048 --batch-size 1 --cpu`.
 
 2026-07-08 metric calculation correction:
 

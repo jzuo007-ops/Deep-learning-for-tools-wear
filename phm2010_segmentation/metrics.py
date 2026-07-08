@@ -15,7 +15,11 @@ def confusion_matrix_1d(y_true: np.ndarray, y_pred: np.ndarray, num_classes: int
     return confusion
 
 
-def segmentation_metrics_from_confusion(confusion: np.ndarray) -> Dict[str, float | dict]:
+def segmentation_metrics_from_confusion(
+    confusion: np.ndarray,
+    class_names: Dict[int, str] | None = None,
+) -> Dict[str, float | dict]:
+    class_names = class_names or CLASS_NAMES
     confusion = np.asarray(confusion, dtype=np.float64)
     total = confusion.sum()
     accuracy = float(np.trace(confusion) / total) if total > 0 else 0.0
@@ -34,7 +38,7 @@ def segmentation_metrics_from_confusion(confusion: np.ndarray) -> Dict[str, floa
         recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
         iou = tp / (tp + fp + fn) if (tp + fp + fn) > 0 else 0.0
         f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
-        name = CLASS_NAMES.get(cls, str(cls))
+        name = class_names.get(cls, str(cls))
         per_class[name] = {
             "precision": float(precision),
             "recall": float(recall),
@@ -59,11 +63,14 @@ def segmentation_metrics_from_confusion(confusion: np.ndarray) -> Dict[str, floa
     }
 
 
-def average_sample_metrics(confusions: List[np.ndarray]) -> Dict[str, float]:
+def average_sample_metrics(
+    confusions: List[np.ndarray],
+    class_names: Dict[int, str] | None = None,
+) -> Dict[str, float]:
     sample_ious = []
     sample_f1s = []
     for confusion in confusions:
-        metrics = segmentation_metrics_from_confusion(confusion)
+        metrics = segmentation_metrics_from_confusion(confusion, class_names=class_names)
         sample_ious.append(metrics["mean_iou"])
         sample_f1s.append(metrics["macro_f1"])
     return {

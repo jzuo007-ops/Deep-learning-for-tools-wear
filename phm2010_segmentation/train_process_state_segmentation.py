@@ -17,6 +17,7 @@ if str(ROOT) not in sys.path:
 from phm2010_segmentation.dataset import (
     PHM2010SegmentationDataset,
     TOOLS,
+    load_excluded_cut_paths,
     make_tool_split,
 )
 from phm2010_segmentation.metrics import (
@@ -29,6 +30,10 @@ from src.segmentation_factory import SEGMENTATION_MODEL_NAMES, build_segmentatio
 
 
 CURRENT_DIR = Path(__file__).resolve().parent
+BINARY_CLASS_NAMES = {
+    0: "transition",
+    1: "stable_cutting",
+}
 
 
 def set_seed(seed: int) -> None:
@@ -49,7 +54,11 @@ def criterion(outputs, target, weight=None):
     return sum(losses.values())
 
 
-def evaluate(model, loader, device, num_classes=3):
+def get_class_names(task: str) -> dict[int, str]:
+    return BINARY_CLASS_NAMES if task == "binary" else CLASS_NAMES
+
+
+def evaluate(model, loader, device, num_classes=3, class_names=None):
     model.eval()
     confusion = np.zeros((num_classes, num_classes), dtype=np.int64)
     sample_confusions = []
@@ -64,12 +73,12 @@ def evaluate(model, loader, device, num_classes=3):
                 sample_confusions.append(
                     confusion_matrix_1d(sample_labels, sample_preds, num_classes=num_classes)
                 )
-    metrics = segmentation_metrics_from_confusion(confusion)
-    metrics.update(average_sample_metrics(sample_confusions))
+    metrics = segmentation_metrics_from_confusion(confusion, class_names=class_names)
+    metrics.update(average_sample_metrics(sample_confusions, class_names=class_names))
     return metrics, confusion
 
 
-def make_loader(args, tools, train):
+def make_loader(args, tools, train, excluded_cut_paths):
     config = PseudoLabelConfig(
         smooth_window=args.smooth_window,
         active_threshold=args.active_threshold,
@@ -92,6 +101,8 @@ def make_loader(args, tools, train):
         label_cache_dir=args.label_cache_dir,
         require_label_cache=not args.allow_missing_label_cache,
         strict_label_cache_config=not args.allow_label_cache_config_mismatch,
+        task=args.task,
+        excluded_cut_paths=excluded_cut_paths,
     )
     return DataLoader(
         dataset,
@@ -108,14 +119,18 @@ def run_fold(args, test_tool: str):
     output_dir.mkdir(parents=True, exist_ok=True)
     device = torch.device("cuda:0" if torch.cuda.is_available() and not args.cpu else "cpu")
 
-    train_loader = make_loader(args, train_tools, train=True)
-    val_loader = make_loader(args, val_tools, train=False)
-    test_loader = make_loader(args, test_tools, train=False)
+    excluded_cut_paths = load_excluded_cut_paths(args.exclude_samples_csv)
+    class_names = get_class_names(args.task)
+    num_classes = len(class_names)
+
+    train_loader = make_loader(args, train_tools, train=True, excluded_cut_paths=excluded_cut_paths)
+    val_loader = make_loader(args, val_tools, train=False, excluded_cut_paths=excluded_cut_paths)
+    test_loader = make_loader(args, test_tools, train=False, excluded_cut_paths=excluded_cut_paths)
 
     model = build_segmentation_model(
         name=args.model,
         in_channels=7,
-        num_classes=3,
+        num_classes=num_classes,
         aux_loss=True,
         backbone_name=args.backbone,
     ).to(device)
@@ -140,7 +155,7 @@ def run_fold(args, test_tool: str):
             total_loss += loss.item()
         scheduler.step()
 
-        val_metrics, _ = evaluate(model, val_loader, device)
+        val_metrics, _ = evaluate(model, val_loader, device, num_classes=num_classes, class_names=class_names)
         row = {
             "epoch": epoch,
             "train_loss": total_loss / max(len(train_loader), 1),
@@ -163,8 +178,8 @@ def run_fold(args, test_tool: str):
 
     if best_state is not None:
         model.load_state_dict(best_state)
-    val_metrics, val_confusion = evaluate(model, val_loader, device)
-    test_metrics, test_confusion = evaluate(model, test_loader, device)
+    val_metrics, val_confusion = evaluate(model, val_loader, device, num_classes=num_classes, class_names=class_names)
+    test_metrics, test_confusion = evaluate(model, test_loader, device, num_classes=num_classes, class_names=class_names)
 
     with (output_dir / "training_log.csv").open("w", newline="", encoding="utf-8") as file:
         if rows:
@@ -177,7 +192,10 @@ def run_fold(args, test_tool: str):
         "train_tools": train_tools,
         "val_tools": val_tools,
         "test_tools": test_tools,
-        "classes": CLASS_NAMES,
+        "task": args.task,
+        "classes": class_names,
+        "excluded_samples_csv": args.exclude_samples_csv,
+        "excluded_cut_count": len(excluded_cut_paths),
         "val_metrics": val_metrics,
         "test_metrics": test_metrics,
         "val_confusion": val_confusion.tolist(),
@@ -201,11 +219,13 @@ def parse_args():
     parser.add_argument("--crop-length", type=int, default=8192)
     parser.add_argument("--max-cuts-per-tool", type=int, default=None)
     parser.add_argument("--num-workers", type=int, default=0)
+    parser.add_argument("--task", default="three_class", choices=["three_class", "binary"])
+    parser.add_argument("--exclude-samples-csv", action="append", default=[])
     parser.add_argument("--model", default="deeplabv3_1d", choices=list(SEGMENTATION_MODEL_NAMES))
     parser.add_argument("--backbone", default="resnet50", choices=["resnet50", "lstm"])
     parser.add_argument("--lr", type=float, default=5e-4)
     parser.add_argument("--weight-decay", type=float, default=1e-4)
-    parser.add_argument("--class-weights", type=float, nargs=3, default=[1.0, 2.0, 1.0])
+    parser.add_argument("--class-weights", type=float, nargs="+", default=None)
     parser.add_argument("--smooth-window", type=int, default=2048)
     parser.add_argument("--active-threshold", type=float, default=0.25)
     parser.add_argument("--inactive-threshold", type=float, default=0.12)
@@ -227,6 +247,14 @@ def parse_args():
 def main():
     args = parse_args()
     set_seed(args.seed)
+    num_classes = len(get_class_names(args.task))
+    if args.class_weights is None:
+        args.class_weights = [2.0, 1.0] if args.task == "binary" else [1.0, 2.0, 1.0]
+    if len(args.class_weights) != num_classes:
+        raise ValueError(
+            f"--class-weights must contain {num_classes} values for task={args.task}, "
+            f"got {len(args.class_weights)}"
+        )
     folds = TOOLS if args.fold == "all" else (args.fold,)
     summaries = [run_fold(args, fold) for fold in folds]
     output_dir = Path(args.output_dir)

@@ -1,4 +1,5 @@
 import random
+import csv
 from pathlib import Path
 from typing import Iterable, List, Sequence
 
@@ -12,6 +13,30 @@ from .label_cache import cache_path_for_cut, load_label_cache
 
 
 TOOLS = ("c1", "c2", "c3", "c4", "c5", "c6")
+
+
+def normalize_relative_cut_path(value: str | Path) -> str:
+    path = Path(str(value).strip().replace("\\", "/"))
+    return "/".join(path.parts).lower()
+
+
+def load_excluded_cut_paths(csv_files: Sequence[str | Path] | None) -> set[str]:
+    excluded: set[str] = set()
+    for csv_file in csv_files or []:
+        if csv_file is None or str(csv_file).strip() == "":
+            continue
+        path = Path(csv_file)
+        if not path.exists():
+            raise FileNotFoundError(f"Exclude sample CSV not found: {path}")
+        with path.open("r", newline="", encoding="utf-8-sig") as file:
+            reader = csv.DictReader(file)
+            if "cut_file" not in (reader.fieldnames or []):
+                raise ValueError(f"Exclude sample CSV must contain a cut_file column: {path}")
+            for row in reader:
+                cut_file = (row.get("cut_file") or "").strip()
+                if cut_file:
+                    excluded.add(normalize_relative_cut_path(cut_file))
+    return excluded
 
 
 def list_cut_files(
@@ -52,16 +77,31 @@ class PHM2010SegmentationDataset(Dataset):
         label_cache_dir: str | Path | None = None,
         require_label_cache: bool = False,
         strict_label_cache_config: bool = True,
+        task: str = "three_class",
+        excluded_cut_paths: Sequence[str] | set[str] | None = None,
     ):
         self.data_root = Path(data_root)
         self.tools = tuple(tools)
         self.crop_length = int(crop_length)
         self.train = train
+        if task not in {"three_class", "binary"}:
+            raise ValueError(f"Unknown segmentation task={task!r}; expected three_class or binary")
+        self.task = task
+        self.excluded_cut_paths = {
+            normalize_relative_cut_path(path)
+            for path in (excluded_cut_paths or [])
+        }
         self.files = list_cut_files(
             self.data_root,
             tools=self.tools,
             max_cuts_per_tool=max_cuts_per_tool,
         )
+        if self.excluded_cut_paths:
+            self.files = [
+                path for path in self.files
+                if normalize_relative_cut_path(path.resolve().relative_to(self.data_root.resolve()))
+                not in self.excluded_cut_paths
+            ]
         self.pseudo_label_config = pseudo_label_config or PseudoLabelConfig()
         self.label_cache_dir = Path(label_cache_dir) if label_cache_dir is not None else None
         self.require_label_cache = require_label_cache
@@ -88,6 +128,11 @@ class PHM2010SegmentationDataset(Dataset):
         labels, _, _ = generate_three_class_labels(data, self.pseudo_label_config)
         return labels
 
+    def _map_labels_for_task(self, labels: np.ndarray) -> np.ndarray:
+        if self.task == "three_class":
+            return labels
+        return np.where(labels == 2, 1, 0).astype(np.int64)
+
     def __len__(self):
         return len(self.files)
 
@@ -103,7 +148,7 @@ class PHM2010SegmentationDataset(Dataset):
     def __getitem__(self, index):
         path = self.files[index]
         data = read_cut_csv(path)
-        labels = self._load_labels(path, data)
+        labels = self._map_labels_for_task(self._load_labels(path, data))
         start, end = self._crop_bounds(len(data))
         window = data[start:end]
         target = labels[start:end]
