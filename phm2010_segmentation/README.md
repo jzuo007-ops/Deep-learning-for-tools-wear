@@ -117,6 +117,26 @@ Use a fixed seed to reproduce the same random set:
 
 Each run creates a new folder under `phm2010_segmentation/outputs/random_label_samples/` with individual plots, JSON metadata, `random_label_samples_summary.csv`, and a contact-sheet overview image. This script always uses the current pseudo-label rule directly, rather than reading label cache files.
 
+Find and collect cuts that contain `non_cutting` labels:
+
+```powershell
+& 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' phm2010_segmentation\find_non_cutting_samples.py --run-name current_non_cutting_scan
+```
+
+For a fast scan using only existing cached labels:
+
+```powershell
+& 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' phm2010_segmentation\find_non_cutting_samples.py --cache-only --no-plots --run-name cache_non_cutting_scan
+```
+
+The script writes results under `phm2010_segmentation/outputs/non_cutting_samples/<run-name>/`, including `non_cutting_samples.csv`, per-sample JSON files, optional waveform plots, and a contact sheet. Add `--copy-csv` only when you really want to duplicate the raw CSV files into that output folder.
+
+To quickly stop after finding a few candidates:
+
+```powershell
+& 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' phm2010_segmentation\find_non_cutting_samples.py --tools c1 --stop-after-matches 5 --run-name c1_non_cutting_examples
+```
+
 Plot model predictions after training:
 
 ```powershell
