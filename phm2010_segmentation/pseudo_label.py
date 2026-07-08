@@ -19,6 +19,7 @@ CLASS_COLORS = {
 
 @dataclass
 class PseudoLabelConfig:
+    label_rule_version: int = 3
     smooth_window: int = 2048
     active_threshold: float = 0.25
     inactive_threshold: float = 0.12
@@ -131,6 +132,12 @@ def _region_overlapping(starts: np.ndarray, ends: np.ndarray, start: int, end: i
     return best_region
 
 
+def _high_overlap(mask: np.ndarray, start: int, end: int) -> int:
+    if end <= start:
+        return 0
+    return int(np.asarray(mask[start:end], dtype=bool).sum())
+
+
 def detect_cutting_region(score: np.ndarray, config: PseudoLabelConfig) -> Tuple[int, int, np.ndarray]:
     score = np.asarray(score, dtype=np.float64).reshape(-1)
     n_points = len(score)
@@ -152,18 +159,33 @@ def detect_cutting_region(score: np.ndarray, config: PseudoLabelConfig) -> Tuple
         edge_margin=int(round(n_points * config.edge_margin_ratio)),
     )
 
+    starts, ends = _true_regions(candidate_mask)
+    min_region_len = max(config.min_active_points, int(round(n_points * config.max_gap_ratio)))
+    meaningful_regions = []
+    for region_start, region_end in zip(starts, ends):
+        region_start = int(region_start)
+        region_end = int(region_end)
+        region_len = region_end - region_start
+        high_points = _high_overlap(high_mask, region_start, region_end)
+        if region_len >= min_region_len and high_points >= config.min_active_points:
+            meaningful_regions.append((region_start, region_end))
+
+    if meaningful_regions:
+        active_start = min(start for start, _ in meaningful_regions)
+        active_end = max(end for _, end in meaningful_regions)
     if high_mask.any():
-        high_start, high_end = _longest_true_region(high_mask)
-        starts, ends = _true_regions(candidate_mask)
-        active_region = _region_overlapping(starts, ends, high_start, high_end)
-        if active_region is None:
-            active_start, active_end = high_start, high_end
-        else:
-            active_start, active_end = active_region
+        if not meaningful_regions:
+            high_start, high_end = _longest_true_region(high_mask)
+            active_region = _region_overlapping(starts, ends, high_start, high_end)
+            if active_region is None:
+                active_start, active_end = high_start, high_end
+            else:
+                active_start, active_end = active_region
     else:
-        true_indices = np.where(candidate_mask)[0]
-        active_start = int(true_indices[0]) if true_indices.size else 0
-        active_end = int(true_indices[-1]) + 1 if true_indices.size else n_points
+        if not meaningful_regions:
+            true_indices = np.where(candidate_mask)[0]
+            active_start = int(true_indices[0]) if true_indices.size else 0
+            active_end = int(true_indices[-1]) + 1 if true_indices.size else n_points
 
     active_len = active_end - active_start
     min_cut_points = max(config.min_active_points, int(round(n_points * config.min_cut_ratio)))

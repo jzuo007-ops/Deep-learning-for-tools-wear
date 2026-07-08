@@ -10,6 +10,7 @@ from .pseudo_label import PseudoLabelConfig
 
 def config_to_dict(config: PseudoLabelConfig) -> dict[str, Any]:
     return {
+        "label_rule_version": int(config.label_rule_version),
         "smooth_window": int(config.smooth_window),
         "active_threshold": float(config.active_threshold),
         "inactive_threshold": float(config.inactive_threshold),

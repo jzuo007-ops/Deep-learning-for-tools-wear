@@ -84,10 +84,10 @@ Run six folds:
 & 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' phm2010_segmentation\train_process_state_segmentation.py --fold all --epochs 30 --batch-size 4 --crop-length 8192 --save-checkpoint
 ```
 
-Run binary segmentation after excluding unreliable `non_cutting` candidates:
+Run binary segmentation after excluding persistent edge `non_cutting` candidates:
 
 ```powershell
-& 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' phm2010_segmentation\build_label_cache.py --tools all
+& 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' phm2010_segmentation\build_label_cache.py --tools all --overwrite
 & 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' phm2010_segmentation\train_process_state_segmentation.py --task binary --exclude-samples-csv phm2010_segmentation\config\non_cutting_exclude_samples.csv --fold all --epochs 30 --batch-size 4 --crop-length 8192 --save-checkpoint
 ```
 
@@ -182,11 +182,19 @@ green:  stable_cutting
 
 ## Experiment Result Log
 
+2026-07-08 pseudo-label rule v3 correction:
+
+- Visual check found that samples such as `c1/c_1_156.csv`, `c5/c_5_148.csv`, `c5/c_5_152.csv`, `c2/c_2_022.csv`, and `c2/c_2_023.csv` were false `non_cutting` detections. Their waveforms still show continuous cutting, but the old rule selected only the early high-activity region and treated later lower-energy cutting as stopped.
+- Change made: active-region detection now keeps all sustained cutting regions that contain enough high-activity points, then spans from the first sustained region to the last sustained region. This prevents low-energy valleys inside one machining pass from being labeled as `non_cutting`, while still ignoring short tail spikes after a real stop.
+- Check result on old candidates: the five false-positive samples above changed to `non_cutting = 0%`; persistent tail-stop samples such as `c1/c_1_315.csv` and `c1/c_1_309.csv` still keep their non-cutting tails.
+- Added `label_rule_version = 3` to the label-cache fingerprint. Rebuild cached labels with `--overwrite` before any new training run.
+- Updated `phm2010_segmentation/config/non_cutting_exclude_samples.csv` from 14 old candidates to 9 persistent edge `non_cutting` samples.
+
 2026-07-08 binary segmentation after excluding non-cutting candidates:
 
 - Remote scan result: `phm2010_segmentation/outputs/non_cutting_samples/current_non_cutting_scan/non_cutting_samples.csv` found 14 candidates with `non_cutting` labels among 1,890 PHM2010 cuts.
-- Visual interpretation: several high-ratio candidates, such as `c1/c_1_156.csv`, appear to be pseudo-label failures rather than reliable non-cutting samples.
-- Decision: do not train a three-class model with this unreliable and sparse `non_cutting` class for now.
+- Visual interpretation: several high-ratio candidates, such as `c1/c_1_156.csv`, were pseudo-label failures rather than reliable non-cutting samples under the old rule.
+- Decision: do not train a three-class model with this sparse `non_cutting` class for now.
 - Added tracked exclusion list: `phm2010_segmentation/config/non_cutting_exclude_samples.csv`.
 - Added binary training mode: `--task binary` maps original `transition` to class 0 and `stable_cutting` to class 1, while removing cuts listed in `--exclude-samples-csv`.
 - Debug command passed: `train_process_state_segmentation.py --task binary --exclude-samples-csv phm2010_segmentation\config\non_cutting_exclude_samples.csv --model tcn_seg --fold c1 --epochs 0 --max-cuts-per-tool 1 --crop-length 2048 --batch-size 1 --cpu`.
