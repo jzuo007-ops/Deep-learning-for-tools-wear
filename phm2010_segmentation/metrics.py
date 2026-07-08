@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, List
 
 import numpy as np
 
@@ -22,10 +22,14 @@ def segmentation_metrics_from_confusion(confusion: np.ndarray) -> Dict[str, floa
     per_class = {}
     ious = []
     f1s = []
+    valid_ious = []
+    valid_f1s = []
+    valid_class_names = []
     for cls in range(confusion.shape[0]):
         tp = confusion[cls, cls]
         fp = confusion[:, cls].sum() - tp
         fn = confusion[cls, :].sum() - tp
+        support = confusion[cls, :].sum()
         precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
         recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
         iou = tp / (tp + fp + fn) if (tp + fp + fn) > 0 else 0.0
@@ -36,12 +40,33 @@ def segmentation_metrics_from_confusion(confusion: np.ndarray) -> Dict[str, floa
             "recall": float(recall),
             "iou": float(iou),
             "f1": float(f1),
+            "support": float(support),
         }
         ious.append(iou)
         f1s.append(f1)
+        if support > 0:
+            valid_ious.append(iou)
+            valid_f1s.append(f1)
+            valid_class_names.append(name)
     return {
         "point_accuracy": accuracy,
-        "mean_iou": float(np.mean(ious)),
-        "macro_f1": float(np.mean(f1s)),
+        "mean_iou": float(np.mean(valid_ious)) if valid_ious else 0.0,
+        "macro_f1": float(np.mean(valid_f1s)) if valid_f1s else 0.0,
+        "mean_iou_all_classes": float(np.mean(ious)) if ious else 0.0,
+        "macro_f1_all_classes": float(np.mean(f1s)) if f1s else 0.0,
+        "valid_classes": valid_class_names,
         "per_class": per_class,
+    }
+
+
+def average_sample_metrics(confusions: List[np.ndarray]) -> Dict[str, float]:
+    sample_ious = []
+    sample_f1s = []
+    for confusion in confusions:
+        metrics = segmentation_metrics_from_confusion(confusion)
+        sample_ious.append(metrics["mean_iou"])
+        sample_f1s.append(metrics["macro_f1"])
+    return {
+        "sample_mean_iou": float(np.mean(sample_ious)) if sample_ious else 0.0,
+        "sample_macro_f1": float(np.mean(sample_f1s)) if sample_f1s else 0.0,
     }

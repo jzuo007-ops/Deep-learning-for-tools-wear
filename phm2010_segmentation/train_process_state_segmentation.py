@@ -19,7 +19,11 @@ from phm2010_segmentation.dataset import (
     TOOLS,
     make_tool_split,
 )
-from phm2010_segmentation.metrics import confusion_matrix_1d, segmentation_metrics_from_confusion
+from phm2010_segmentation.metrics import (
+    average_sample_metrics,
+    confusion_matrix_1d,
+    segmentation_metrics_from_confusion,
+)
 from phm2010_segmentation.pseudo_label import CLASS_NAMES, PseudoLabelConfig
 from src.segmentation_factory import SEGMENTATION_MODEL_NAMES, build_segmentation_model
 
@@ -48,13 +52,20 @@ def criterion(outputs, target, weight=None):
 def evaluate(model, loader, device, num_classes=3):
     model.eval()
     confusion = np.zeros((num_classes, num_classes), dtype=np.int64)
+    sample_confusions = []
     with torch.no_grad():
         for signals, labels in loader:
             signals = signals.to(device)
             outputs = model(signals)["out"]
             preds = outputs.argmax(dim=1).cpu().numpy()
-            confusion += confusion_matrix_1d(labels.numpy(), preds, num_classes=num_classes)
+            labels_np = labels.numpy()
+            confusion += confusion_matrix_1d(labels_np, preds, num_classes=num_classes)
+            for sample_labels, sample_preds in zip(labels_np, preds):
+                sample_confusions.append(
+                    confusion_matrix_1d(sample_labels, sample_preds, num_classes=num_classes)
+                )
     metrics = segmentation_metrics_from_confusion(confusion)
+    metrics.update(average_sample_metrics(sample_confusions))
     return metrics, confusion
 
 
@@ -135,16 +146,19 @@ def run_fold(args, test_tool: str):
             "train_loss": total_loss / max(len(train_loader), 1),
             "val_point_accuracy": val_metrics["point_accuracy"],
             "val_mean_iou": val_metrics["mean_iou"],
+            "val_sample_mean_iou": val_metrics["sample_mean_iou"],
+            "val_mean_iou_all_classes": val_metrics["mean_iou_all_classes"],
             "val_macro_f1": val_metrics["macro_f1"],
         }
         rows.append(row)
         print(
             f"fold={test_tool} epoch={epoch}/{args.epochs} "
-            f"loss={row['train_loss']:.4f} val_mIoU={row['val_mean_iou']:.4f} "
+            f"loss={row['train_loss']:.4f} val_sample_mIoU={row['val_sample_mean_iou']:.4f} "
+            f"val_mIoU={row['val_mean_iou']:.4f} "
             f"val_acc={row['val_point_accuracy']:.4f}"
         )
-        if val_metrics["mean_iou"] > best_val_miou:
-            best_val_miou = val_metrics["mean_iou"]
+        if val_metrics["sample_mean_iou"] > best_val_miou:
+            best_val_miou = val_metrics["sample_mean_iou"]
             best_state = {name: value.detach().cpu().clone() for name, value in model.state_dict().items()}
 
     if best_state is not None:
