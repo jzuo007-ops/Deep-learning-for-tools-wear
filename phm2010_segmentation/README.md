@@ -4,6 +4,38 @@ This folder contains the first version of a PHM 2010 process-state segmentation 
 
 The goal is not to predict tool wear directly. The goal is to train a 1D process-state segmentation model to identify useful cutting states in each complete machining waveform, then pass stable-cutting segments to a VB regression model such as CNN-BiLSTM-Attention.
 
+## Research Positioning
+
+The rule-based labeling algorithm is not the final contribution by itself. It is used as weak supervision to create initial process-state labels when PHM2010 does not provide point-wise machining-state annotations.
+
+The segmentation model is meaningful only if it goes beyond simply reproducing the rule. Its role is to learn a deployable process-state recognizer that can run on short signal windows, generalize across tools and cutting conditions, and provide stable-cutting masks for downstream VB regression.
+
+Therefore, the key paper claim should not be:
+
+```text
+rule labels -> segmentation model -> model copies the rule
+```
+
+The key paper claim should be:
+
+```text
+rule-based weak labels
+-> train a 1D temporal segmentation model
+-> extract stable-cutting segments
+-> reduce non-stationary signal interference
+-> improve VB wear prediction
+```
+
+The segmentation mIoU/F1 results are necessary, but they are not sufficient as the main proof. The decisive experiment should compare VB regression performance before and after process-state segmentation:
+
+```text
+complete waveform -> VB regression
+rule-selected stable cutting -> VB regression
+model-selected stable cutting -> VB regression
+```
+
+If the model-selected stable-cutting pipeline improves MAE, RMSE, R2, or MAPE over the complete-waveform baseline, then the segmentation module has practical value even though its first labels came from rules.
+
 ## Classes
 
 The first version uses rule-based pseudo labels with three classes:
