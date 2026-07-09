@@ -54,6 +54,20 @@ def criterion(outputs, target, weight=None):
     return sum(losses.values())
 
 
+def to_jsonable(value):
+    if isinstance(value, Path):
+        return str(value)
+    if isinstance(value, dict):
+        return {str(key): to_jsonable(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [to_jsonable(item) for item in value]
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    if isinstance(value, np.generic):
+        return value.item()
+    return value
+
+
 def get_class_names(task: str) -> dict[int, str]:
     return BINARY_CLASS_NAMES if task == "binary" else CLASS_NAMES
 
@@ -201,6 +215,7 @@ def run_fold(args, test_tool: str):
         "val_confusion": val_confusion.tolist(),
         "test_confusion": test_confusion.tolist(),
     }
+    summary = to_jsonable(summary)
     with (output_dir / "summary.json").open("w", encoding="utf-8") as file:
         json.dump(summary, file, indent=2)
     if args.save_checkpoint and best_state is not None:
@@ -260,8 +275,8 @@ def main():
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     with (output_dir / "cross_validation_summary.json").open("w", encoding="utf-8") as file:
-        json.dump(summaries, file, indent=2)
-    print(json.dumps(summaries, indent=2))
+        json.dump(to_jsonable(summaries), file, indent=2)
+    print(json.dumps(to_jsonable(summaries), indent=2))
 
 
 if __name__ == "__main__":
