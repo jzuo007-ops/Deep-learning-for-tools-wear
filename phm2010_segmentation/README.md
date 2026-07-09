@@ -93,6 +93,15 @@ If you change pseudo-label parameters such as `--inactive-threshold`, `--max-gap
 
 ## Remote Training
 
+Default editor run configuration:
+
+- `fold = all`
+- `task = binary`
+- `eval_mode = boundary`
+- `exclude_samples_csv = phm2010_segmentation/config/non_cutting_exclude_samples.csv`
+
+This means running `train_process_state_segmentation.py` directly from an editor uses the current paper-oriented setting by default: transition/stable-cutting segmentation, persistent edge non-cutting sample exclusion, and boundary-aware validation/test crops.
+
 Run one fold:
 
 ```powershell

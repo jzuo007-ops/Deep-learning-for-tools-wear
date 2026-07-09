@@ -79,6 +79,7 @@ class PHM2010SegmentationDataset(Dataset):
         strict_label_cache_config: bool = True,
         task: str = "three_class",
         excluded_cut_paths: Sequence[str] | set[str] | None = None,
+        eval_mode: str = "center",
     ):
         self.data_root = Path(data_root)
         self.tools = tuple(tools)
@@ -87,6 +88,9 @@ class PHM2010SegmentationDataset(Dataset):
         if task not in {"three_class", "binary"}:
             raise ValueError(f"Unknown segmentation task={task!r}; expected three_class or binary")
         self.task = task
+        if eval_mode not in {"center", "boundary"}:
+            raise ValueError(f"Unknown eval_mode={eval_mode!r}; expected center or boundary")
+        self.eval_mode = eval_mode
         self.excluded_cut_paths = {
             normalize_relative_cut_path(path)
             for path in (excluded_cut_paths or [])
@@ -134,22 +138,33 @@ class PHM2010SegmentationDataset(Dataset):
         return np.where(labels == 2, 1, 0).astype(np.int64)
 
     def __len__(self):
-        return len(self.files)
+        if self.train or self.eval_mode == "center":
+            return len(self.files)
+        return len(self.files) * 3
 
-    def _crop_bounds(self, n_points: int) -> tuple[int, int]:
+    def _crop_bounds(self, n_points: int, eval_slot: int = 0) -> tuple[int, int]:
         if n_points <= self.crop_length:
             return 0, n_points
         if self.train:
             start = random.randint(0, n_points - self.crop_length)
+        elif self.eval_mode == "boundary":
+            starts = [0, (n_points - self.crop_length) // 2, n_points - self.crop_length]
+            start = starts[int(eval_slot) % len(starts)]
         else:
             start = (n_points - self.crop_length) // 2
         return start, start + self.crop_length
 
     def __getitem__(self, index):
-        path = self.files[index]
+        eval_slot = 0
+        if self.train or self.eval_mode == "center":
+            file_index = index
+        else:
+            file_index = index // 3
+            eval_slot = index % 3
+        path = self.files[file_index]
         data = read_cut_csv(path)
         labels = self._map_labels_for_task(self._load_labels(path, data))
-        start, end = self._crop_bounds(len(data))
+        start, end = self._crop_bounds(len(data), eval_slot=eval_slot)
         window = data[start:end]
         target = labels[start:end]
 

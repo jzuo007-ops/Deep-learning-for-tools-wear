@@ -30,6 +30,7 @@ from src.segmentation_factory import SEGMENTATION_MODEL_NAMES, build_segmentatio
 
 
 CURRENT_DIR = Path(__file__).resolve().parent
+DEFAULT_EXCLUDE_SAMPLES_CSV = CURRENT_DIR / "config" / "non_cutting_exclude_samples.csv"
 BINARY_CLASS_NAMES = {
     0: "transition",
     1: "stable_cutting",
@@ -117,6 +118,7 @@ def make_loader(args, tools, train, excluded_cut_paths):
         strict_label_cache_config=not args.allow_label_cache_config_mismatch,
         task=args.task,
         excluded_cut_paths=excluded_cut_paths,
+        eval_mode="center" if train else args.eval_mode,
     )
     return DataLoader(
         dataset,
@@ -208,6 +210,7 @@ def run_fold(args, test_tool: str):
         "test_tools": test_tools,
         "task": args.task,
         "classes": class_names,
+        "eval_mode": args.eval_mode,
         "excluded_samples_csv": args.exclude_samples_csv,
         "excluded_cut_count": len(excluded_cut_paths),
         "val_metrics": val_metrics,
@@ -228,14 +231,15 @@ def parse_args():
     parser.add_argument("--data-root", default=str(ROOT / "PHM 2010"))
     parser.add_argument("--output-dir", default=str(CURRENT_DIR / "outputs"))
     parser.add_argument("--label-cache-dir", default=str(CURRENT_DIR / "label_cache"))
-    parser.add_argument("--fold", default="c1", choices=list(TOOLS) + ["all"])
+    parser.add_argument("--fold", default="all", choices=list(TOOLS) + ["all"])
     parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--crop-length", type=int, default=8192)
     parser.add_argument("--max-cuts-per-tool", type=int, default=None)
     parser.add_argument("--num-workers", type=int, default=0)
-    parser.add_argument("--task", default="three_class", choices=["three_class", "binary"])
-    parser.add_argument("--exclude-samples-csv", action="append", default=[])
+    parser.add_argument("--task", default="binary", choices=["three_class", "binary"])
+    parser.add_argument("--exclude-samples-csv", action="append", default=[str(DEFAULT_EXCLUDE_SAMPLES_CSV)])
+    parser.add_argument("--eval-mode", default="boundary", choices=["center", "boundary"])
     parser.add_argument("--model", default="deeplabv3_1d", choices=list(SEGMENTATION_MODEL_NAMES))
     parser.add_argument("--backbone", default="resnet50", choices=["resnet50", "lstm"])
     parser.add_argument("--lr", type=float, default=5e-4)
