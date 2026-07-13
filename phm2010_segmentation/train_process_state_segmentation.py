@@ -203,6 +203,11 @@ def run_fold(args, test_tool: str):
             writer.writeheader()
             writer.writerows(rows)
 
+    checkpoint_path = None
+    if args.save_checkpoint and best_state is not None:
+        checkpoint_path = output_dir / "best_model.pth"
+        torch.save(best_state, checkpoint_path)
+
     summary = {
         "fold": test_tool,
         "train_tools": train_tools,
@@ -213,6 +218,8 @@ def run_fold(args, test_tool: str):
         "eval_mode": args.eval_mode,
         "excluded_samples_csv": args.exclude_samples_csv,
         "excluded_cut_count": len(excluded_cut_paths),
+        "checkpoint_saved": checkpoint_path is not None,
+        "checkpoint_path": checkpoint_path,
         "val_metrics": val_metrics,
         "test_metrics": test_metrics,
         "val_confusion": val_confusion.tolist(),
@@ -221,8 +228,6 @@ def run_fold(args, test_tool: str):
     summary = to_jsonable(summary)
     with (output_dir / "summary.json").open("w", encoding="utf-8") as file:
         json.dump(summary, file, indent=2)
-    if args.save_checkpoint and best_state is not None:
-        torch.save(best_state, output_dir / "best_model.pth")
     return summary
 
 
@@ -257,7 +262,8 @@ def parse_args():
     parser.add_argument("--edge-margin-ratio", type=float, default=0.01)
     parser.add_argument("--allow-missing-label-cache", action="store_true")
     parser.add_argument("--allow-label-cache-config-mismatch", action="store_true")
-    parser.add_argument("--save-checkpoint", action="store_true")
+    parser.add_argument("--save-checkpoint", dest="save_checkpoint", action="store_true", default=True)
+    parser.add_argument("--no-save-checkpoint", dest="save_checkpoint", action="store_false")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--cpu", action="store_true")
     return parser.parse_args()

@@ -99,8 +99,19 @@ Default editor run configuration:
 - `task = binary`
 - `eval_mode = boundary`
 - `exclude_samples_csv = phm2010_segmentation/config/non_cutting_exclude_samples.csv`
+- `save_checkpoint = true`
 
 This means running `train_process_state_segmentation.py` directly from an editor uses the current paper-oriented setting by default: transition/stable-cutting segmentation, persistent edge non-cutting sample exclusion, and boundary-aware validation/test crops.
+
+Each fold saves its best model checkpoint by default:
+
+```text
+phm2010_segmentation/outputs/fold_c1/best_model.pth
+phm2010_segmentation/outputs/fold_c2/best_model.pth
+...
+```
+
+Use `--no-save-checkpoint` only for quick debugging when model files are not needed.
 
 Run one fold:
 
@@ -222,6 +233,19 @@ green:  stable_cutting
 - Debug command passed: `train_process_state_segmentation.py --fold c1 --epochs 0 --max-cuts-per-tool 1 --crop-length 2048 --batch-size 1 --cpu`.
 
 ## Experiment Result Log
+
+2026-07-13 binary boundary-evaluation result:
+
+- Result file inspected: `phm2010_segmentation/outputs/cross_validation_summary.json`.
+- Configuration: `task = binary`, `eval_mode = boundary`, `excluded_cut_count = 9`.
+- Classes: `0 = transition`, `1 = stable_cutting`.
+- Six-fold validation average: point accuracy = 0.9944, mean IoU = 0.9876, sample mean IoU = 0.9943, macro F1 = 0.9937.
+- Six-fold test average: point accuracy = 0.9937, mean IoU = 0.9860, sample mean IoU = 0.9935, macro F1 = 0.9929.
+- Test per-class IoU average: `transition = 0.9905`, `stable_cutting = 0.9814`.
+- Weakest test fold: `fold c5`, with mean IoU = 0.9756, macro F1 = 0.9877, transition IoU = 0.9834, stable-cutting IoU = 0.9679.
+- Interpretation: this is the first usable segmentation metric after switching from center-only evaluation to boundary-aware evaluation. Both validation and test contain `transition` and `stable_cutting` support, so the previous stable-only 1.0 metric problem is no longer present.
+- Caution: the boundary-window evaluation still matches the pseudo-label construction closely because transition regions are defined near the start and end of each cut. The next required check is full-waveform prediction visualization and the downstream VB-regression comparison: complete waveform vs rule-selected stable cutting vs model-selected stable cutting.
+- Note: local `fold_c*/training_log.csv` files appear to be older three-class logs and should not be used for this result summary unless regenerated together with the current run.
 
 2026-07-08 pseudo-label rule v3 correction:
 
