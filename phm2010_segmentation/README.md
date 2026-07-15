@@ -209,6 +209,23 @@ Plot model predictions after training:
 & 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' phm2010_segmentation\plot_segmentation_result.py --cut-file 'PHM 2010\c1\c_1_253.csv' --checkpoint phm2010_segmentation\outputs\fold_c1\best_model.pth
 ```
 
+Plot full-waveform predictions from saved fold checkpoints:
+
+```powershell
+& 'D:\AppInsDir\Anaconda3\envs\pytorch-py3.12\python.exe' phm2010_segmentation\plot_full_waveform_predictions.py
+```
+
+Default behavior:
+
+```text
+folds: c1-c6
+checkpoint: phm2010_segmentation/outputs/fold_c*/best_model.pth
+samples per fold: 3 evenly spaced test cuts
+output: phm2010_segmentation/outputs/full_waveform_predictions/
+```
+
+The output includes one PNG and one JSON per cut, plus `full_waveform_prediction_contact_sheet.jpg` and `run_summary.json`. This visualization is required before using the segmentation model for VB regression, because boundary-window metrics can still hide poor full-waveform behavior.
+
 Outputs are saved under:
 
 ```text
