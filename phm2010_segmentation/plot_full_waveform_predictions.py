@@ -110,6 +110,7 @@ def prediction_from_checkpoint(
     backbone: str,
     crop_length: int,
     stride: int,
+    inference_mode: str,
     device: torch.device,
 ) -> np.ndarray:
     model = build_segmentation_model(
@@ -124,6 +125,12 @@ def prediction_from_checkpoint(
     model.eval()
 
     n_points = len(data)
+    if inference_mode == "full":
+        with torch.no_grad():
+            signal = torch.from_numpy(normalize_window(data).T).float().unsqueeze(0).to(device)
+            logits = model(signal)["out"][0, :, :n_points]
+            return logits.argmax(dim=0).cpu().numpy().astype(np.int64)
+
     vote_scores = np.zeros((2, n_points), dtype=np.float32)
     counts = np.zeros(n_points, dtype=np.float32)
     stride = max(1, int(stride))
@@ -214,6 +221,7 @@ def plot_one_cut(
         backbone=args.backbone,
         crop_length=args.crop_length,
         stride=args.stride,
+        inference_mode=args.inference_mode,
         device=device,
     )
 
@@ -425,6 +433,7 @@ def parse_args():
     parser.add_argument("--backbone", default="resnet50", choices=["resnet50", "lstm"])
     parser.add_argument("--crop-length", type=int, default=8192)
     parser.add_argument("--stride", type=int, default=4096)
+    parser.add_argument("--inference-mode", default="full", choices=["full", "sliding"])
     parser.add_argument("--samples-per-fold", type=int, default=3)
     parser.add_argument("--all-cuts", action="store_true")
     parser.add_argument("--max-plot-points", type=int, default=30000)
@@ -491,6 +500,7 @@ def main():
         "backbone": args.backbone,
         "crop_length": args.crop_length,
         "stride": args.stride,
+        "inference_mode": args.inference_mode,
         "samples": len(summaries),
         "contact_sheet": contact_sheet,
         "sample_summary_csv": sample_summary_csv,

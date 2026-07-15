@@ -224,9 +224,12 @@ Default behavior:
 ```text
 folds: c1-c6
 checkpoint: phm2010_segmentation/outputs/fold_c*/best_model.pth
+inference mode: full complete-cut inference
 samples per fold: 3 evenly spaced test cuts
 output: phm2010_segmentation/outputs/full_waveform_predictions/
 ```
+
+The default prediction mode feeds one complete cut into the model at a time, so the plotted result is not produced by sliding-window voting. If GPU memory is insufficient for a complete cut, use `--inference-mode sliding` as a fallback diagnostic mode.
 
 The output includes one PNG and one JSON per cut, plus `full_waveform_prediction_contact_sheet.jpg`, `full_waveform_prediction_summary.csv`, and `run_summary.json`. This visualization is required before using the segmentation model for VB regression, because window-level metrics can still hide poor full-waveform behavior.
 
@@ -274,6 +277,7 @@ green:  stable_cutting
   - `c5/c_5_315.csv`: predicted transition `47.34%`, rule transition `10.00%`, delta `+37.34%`.
 - Interpretation: the previous boundary-window cross-validation score is not enough to prove deployable full-waveform segmentation. The saved checkpoints can overpredict `transition` on complete cuts, especially on `c1` and `c5`.
 - Code change made after this diagnosis: default training now uses `multi_position_random` sampling with five windows per cut, and default validation/test uses `multi_position` windows instead of the older three-window boundary-only setting. The full-waveform plotting script now writes `full_waveform_prediction_summary.csv` and full-waveform metrics against pseudo labels.
+- Follow-up correction: the full-waveform plotting script now defaults to `inference_mode = full`, which feeds a complete cut to the model in one pass. Sliding-window prediction is retained only as `--inference-mode sliding` for memory-limited diagnostics.
 - Next required experiment: retrain all folds with the new default sampler, rerun `plot_full_waveform_predictions.py`, and compare full-waveform mIoU/transition-ratio error before using model-selected stable-cutting segments for VB regression.
 
 2026-07-13 binary boundary-evaluation result:
