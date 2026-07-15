@@ -80,6 +80,9 @@ class PHM2010SegmentationDataset(Dataset):
         task: str = "three_class",
         excluded_cut_paths: Sequence[str] | set[str] | None = None,
         eval_mode: str = "center",
+        train_sampling: str = "multi_position_random",
+        train_windows_per_cut: int = 5,
+        eval_windows_per_cut: int = 5,
     ):
         self.data_root = Path(data_root)
         self.tools = tuple(tools)
@@ -88,9 +91,19 @@ class PHM2010SegmentationDataset(Dataset):
         if task not in {"three_class", "binary"}:
             raise ValueError(f"Unknown segmentation task={task!r}; expected three_class or binary")
         self.task = task
-        if eval_mode not in {"center", "boundary"}:
-            raise ValueError(f"Unknown eval_mode={eval_mode!r}; expected center or boundary")
+        if eval_mode not in {"center", "boundary", "multi_position"}:
+            raise ValueError(
+                f"Unknown eval_mode={eval_mode!r}; expected center, boundary, or multi_position"
+            )
         self.eval_mode = eval_mode
+        if train_sampling not in {"random", "multi_position", "multi_position_random"}:
+            raise ValueError(
+                f"Unknown train_sampling={train_sampling!r}; "
+                "expected random, multi_position, or multi_position_random"
+            )
+        self.train_sampling = train_sampling
+        self.train_windows_per_cut = max(1, int(train_windows_per_cut))
+        self.eval_windows_per_cut = max(1, int(eval_windows_per_cut))
         self.excluded_cut_paths = {
             normalize_relative_cut_path(path)
             for path in (excluded_cut_paths or [])
@@ -138,29 +151,66 @@ class PHM2010SegmentationDataset(Dataset):
         return np.where(labels == 2, 1, 0).astype(np.int64)
 
     def __len__(self):
-        if self.train or self.eval_mode == "center":
+        if self.train:
+            return len(self.files) * self.train_windows_per_cut
+        if self.eval_mode == "center":
             return len(self.files)
+        if self.eval_mode == "multi_position":
+            return len(self.files) * self.eval_windows_per_cut
         return len(self.files) * 3
+
+    @staticmethod
+    def _multi_position_start(n_points: int, crop_length: int, slot: int, slots: int) -> int:
+        last_start = max(0, n_points - crop_length)
+        if last_start == 0:
+            return 0
+        if slots <= 1:
+            return last_start // 2
+        positions = np.linspace(0, last_start, num=slots)
+        return int(round(float(positions[int(slot) % slots])))
 
     def _crop_bounds(self, n_points: int, eval_slot: int = 0) -> tuple[int, int]:
         if n_points <= self.crop_length:
             return 0, n_points
         if self.train:
-            start = random.randint(0, n_points - self.crop_length)
+            if self.train_sampling == "random":
+                start = random.randint(0, n_points - self.crop_length)
+            else:
+                start = self._multi_position_start(
+                    n_points=n_points,
+                    crop_length=self.crop_length,
+                    slot=eval_slot,
+                    slots=self.train_windows_per_cut,
+                )
+                if self.train_sampling == "multi_position_random":
+                    jitter = max(1, self.crop_length // 4)
+                    start += random.randint(-jitter, jitter)
+                    start = min(max(start, 0), n_points - self.crop_length)
         elif self.eval_mode == "boundary":
             starts = [0, (n_points - self.crop_length) // 2, n_points - self.crop_length]
             start = starts[int(eval_slot) % len(starts)]
+        elif self.eval_mode == "multi_position":
+            start = self._multi_position_start(
+                n_points=n_points,
+                crop_length=self.crop_length,
+                slot=eval_slot,
+                slots=self.eval_windows_per_cut,
+            )
         else:
             start = (n_points - self.crop_length) // 2
         return start, start + self.crop_length
 
     def __getitem__(self, index):
         eval_slot = 0
-        if self.train or self.eval_mode == "center":
+        if self.train:
+            file_index = index // self.train_windows_per_cut
+            eval_slot = index % self.train_windows_per_cut
+        elif self.eval_mode == "center":
             file_index = index
         else:
-            file_index = index // 3
-            eval_slot = index % 3
+            slots = self.eval_windows_per_cut if self.eval_mode == "multi_position" else 3
+            file_index = index // slots
+            eval_slot = index % slots
         path = self.files[file_index]
         data = read_cut_csv(path)
         labels = self._map_labels_for_task(self._load_labels(path, data))

@@ -66,6 +66,7 @@ The updated pseudo-label rule uses hysteresis-style cutting-region detection ins
 - `metrics.py`: point accuracy, present-class mIoU, sample mIoU, macro F1, and per-class metrics.
 - `train_process_state_segmentation.py`: process-state segmentation training and six-tool cross validation.
 - `plot_segmentation_result.py`: draws complete waveforms with colored pseudo-label or prediction regions.
+- `plot_full_waveform_predictions.py`: draws complete waveform predictions from saved fold checkpoints and writes per-sample quantitative summaries.
 
 ## Debug Run
 
@@ -97,11 +98,14 @@ Default editor run configuration:
 
 - `fold = all`
 - `task = binary`
-- `eval_mode = boundary`
+- `eval_mode = multi_position`
+- `train_sampling = multi_position_random`
+- `train_windows_per_cut = 5`
+- `eval_windows_per_cut = 5`
 - `exclude_samples_csv = phm2010_segmentation/config/non_cutting_exclude_samples.csv`
 - `save_checkpoint = true`
 
-This means running `train_process_state_segmentation.py` directly from an editor uses the current paper-oriented setting by default: transition/stable-cutting segmentation, persistent edge non-cutting sample exclusion, and boundary-aware validation/test crops.
+This means running `train_process_state_segmentation.py` directly from an editor uses the current paper-oriented setting by default: transition/stable-cutting segmentation, persistent edge non-cutting sample exclusion, and multi-position windows from each complete cut. Each training cut contributes windows near the entry, interior, and exit portions of the machining waveform, with small random jitter during training.
 
 Each fold saves its best model checkpoint by default:
 
@@ -224,7 +228,7 @@ samples per fold: 3 evenly spaced test cuts
 output: phm2010_segmentation/outputs/full_waveform_predictions/
 ```
 
-The output includes one PNG and one JSON per cut, plus `full_waveform_prediction_contact_sheet.jpg` and `run_summary.json`. This visualization is required before using the segmentation model for VB regression, because boundary-window metrics can still hide poor full-waveform behavior.
+The output includes one PNG and one JSON per cut, plus `full_waveform_prediction_contact_sheet.jpg`, `full_waveform_prediction_summary.csv`, and `run_summary.json`. This visualization is required before using the segmentation model for VB regression, because window-level metrics can still hide poor full-waveform behavior.
 
 Outputs are saved under:
 
@@ -250,6 +254,27 @@ green:  stable_cutting
 - Debug command passed: `train_process_state_segmentation.py --fold c1 --epochs 0 --max-cuts-per-tool 1 --crop-length 2048 --batch-size 1 --cpu`.
 
 ## Experiment Result Log
+
+2026-07-15 full-waveform prediction diagnosis:
+
+- Result file inspected: `phm2010_segmentation/outputs/full_waveform_predictions/run_summary.json`.
+- Configuration: saved `deeplabv3_1d + resnet50` fold checkpoints, binary classes, full-waveform sliding prediction with `crop_length = 8192` and `stride = 4096`.
+- Rule-label ratio is nearly fixed by construction: about `transition = 10%`, `stable_cutting = 90%` for each inspected complete cut.
+- Mean predicted transition ratio over 18 inspected samples: `23.45%`, which is `+13.45%` higher than the rule labels.
+- Fold-level predicted transition ratio:
+  - `c1`: `48.84%`, delta `+38.84%`.
+  - `c2`: `10.74%`, delta `+0.74%`.
+  - `c3`: `9.06%`, delta `-0.94%`.
+  - `c4`: `8.97%`, delta `-1.03%`.
+  - `c5`: `55.19%`, delta `+45.19%`.
+  - `c6`: `7.87%`, delta `-2.13%`.
+- Worst samples by absolute transition-ratio error:
+  - `c1/c_1_001.csv`: predicted transition `98.12%`, rule transition `10.00%`, delta `+88.12%`.
+  - `c5/c_5_001.csv`: predicted transition `82.50%`, rule transition `10.00%`, delta `+72.50%`.
+  - `c5/c_5_315.csv`: predicted transition `47.34%`, rule transition `10.00%`, delta `+37.34%`.
+- Interpretation: the previous boundary-window cross-validation score is not enough to prove deployable full-waveform segmentation. The saved checkpoints can overpredict `transition` on complete cuts, especially on `c1` and `c5`.
+- Code change made after this diagnosis: default training now uses `multi_position_random` sampling with five windows per cut, and default validation/test uses `multi_position` windows instead of the older three-window boundary-only setting. The full-waveform plotting script now writes `full_waveform_prediction_summary.csv` and full-waveform metrics against pseudo labels.
+- Next required experiment: retrain all folds with the new default sampler, rerun `plot_full_waveform_predictions.py`, and compare full-waveform mIoU/transition-ratio error before using model-selected stable-cutting segments for VB regression.
 
 2026-07-13 binary boundary-evaluation result:
 

@@ -119,6 +119,9 @@ def make_loader(args, tools, train, excluded_cut_paths):
         task=args.task,
         excluded_cut_paths=excluded_cut_paths,
         eval_mode="center" if train else args.eval_mode,
+        train_sampling=args.train_sampling,
+        train_windows_per_cut=args.train_windows_per_cut,
+        eval_windows_per_cut=args.eval_windows_per_cut,
     )
     return DataLoader(
         dataset,
@@ -244,7 +247,14 @@ def parse_args():
     parser.add_argument("--num-workers", type=int, default=0)
     parser.add_argument("--task", default="binary", choices=["three_class", "binary"])
     parser.add_argument("--exclude-samples-csv", action="append", default=[str(DEFAULT_EXCLUDE_SAMPLES_CSV)])
-    parser.add_argument("--eval-mode", default="boundary", choices=["center", "boundary"])
+    parser.add_argument("--eval-mode", default="multi_position", choices=["center", "boundary", "multi_position"])
+    parser.add_argument(
+        "--train-sampling",
+        default="multi_position_random",
+        choices=["random", "multi_position", "multi_position_random"],
+    )
+    parser.add_argument("--train-windows-per-cut", type=int, default=5)
+    parser.add_argument("--eval-windows-per-cut", type=int, default=5)
     parser.add_argument("--model", default="deeplabv3_1d", choices=list(SEGMENTATION_MODEL_NAMES))
     parser.add_argument("--backbone", default="resnet50", choices=["resnet50", "lstm"])
     parser.add_argument("--lr", type=float, default=5e-4)

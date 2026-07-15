@@ -1,4 +1,5 @@
 import argparse
+import csv
 import json
 import math
 import sys
@@ -24,6 +25,7 @@ from phm2010_segmentation.dataset import (
     read_cut_csv,
 )
 from phm2010_segmentation.label_cache import cache_path_for_cut, load_label_cache
+from phm2010_segmentation.metrics import confusion_matrix_1d, segmentation_metrics_from_confusion
 from phm2010_segmentation.pseudo_label import (
     CHANNEL_NAMES,
     PseudoLabelConfig,
@@ -167,6 +169,25 @@ def class_percent(labels: np.ndarray) -> dict[str, float]:
     }
 
 
+def metric_summary(rule_labels: np.ndarray, pred_labels: np.ndarray) -> dict:
+    confusion = confusion_matrix_1d(rule_labels, pred_labels, num_classes=2)
+    metrics = segmentation_metrics_from_confusion(confusion, class_names=BINARY_CLASS_NAMES)
+    return {
+        "point_accuracy": metrics["point_accuracy"],
+        "mean_iou": metrics["mean_iou"],
+        "macro_f1": metrics["macro_f1"],
+        "per_class": metrics["per_class"],
+        "confusion": confusion.tolist(),
+    }
+
+
+def percent_delta(rule_percent: dict[str, float], pred_percent: dict[str, float]) -> dict[str, float]:
+    return {
+        name: round(float(pred_percent.get(name, 0.0)) - float(rule_percent.get(name, 0.0)), 6)
+        for name in BINARY_CLASS_NAMES.values()
+    }
+
+
 def plot_one_cut(
     cut_file: Path,
     data_root: Path,
@@ -259,6 +280,11 @@ def plot_one_cut(
         "rule_percent": class_percent(rule_labels),
         "prediction_percent": class_percent(pred_labels),
     }
+    summary["prediction_minus_rule_percent"] = percent_delta(
+        summary["rule_percent"],
+        summary["prediction_percent"],
+    )
+    summary["metrics_vs_rule"] = metric_summary(rule_labels, pred_labels)
     output.with_suffix(".json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     return summary
 
@@ -294,6 +320,98 @@ def make_contact_sheet(image_files: list[Path], output: Path, thumb_size=(520, 2
     output.parent.mkdir(parents=True, exist_ok=True)
     sheet.save(output, quality=90)
     return str(output)
+
+
+def write_sample_summary_csv(summaries: list[dict], output: Path) -> str:
+    fieldnames = [
+        "fold",
+        "relative_cut_file",
+        "point_accuracy",
+        "mean_iou",
+        "macro_f1",
+        "rule_transition_percent",
+        "rule_stable_cutting_percent",
+        "prediction_transition_percent",
+        "prediction_stable_cutting_percent",
+        "transition_percent_delta",
+        "stable_cutting_percent_delta",
+        "output",
+    ]
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with output.open("w", newline="", encoding="utf-8-sig") as file:
+        writer = csv.DictWriter(file, fieldnames=fieldnames)
+        writer.writeheader()
+        for item in summaries:
+            metrics = item["metrics_vs_rule"]
+            rule_percent = item["rule_percent"]
+            prediction_percent = item["prediction_percent"]
+            delta = item["prediction_minus_rule_percent"]
+            writer.writerow(
+                {
+                    "fold": item["fold"],
+                    "relative_cut_file": item["relative_cut_file"],
+                    "point_accuracy": metrics["point_accuracy"],
+                    "mean_iou": metrics["mean_iou"],
+                    "macro_f1": metrics["macro_f1"],
+                    "rule_transition_percent": rule_percent["transition"],
+                    "rule_stable_cutting_percent": rule_percent["stable_cutting"],
+                    "prediction_transition_percent": prediction_percent["transition"],
+                    "prediction_stable_cutting_percent": prediction_percent["stable_cutting"],
+                    "transition_percent_delta": delta["transition"],
+                    "stable_cutting_percent_delta": delta["stable_cutting"],
+                    "output": item["output"],
+                }
+            )
+    return str(output)
+
+
+def aggregate_summaries(summaries: list[dict]) -> dict:
+    if not summaries:
+        return {}
+
+    def mean_of(path: tuple[str, ...]) -> float:
+        values = []
+        for item in summaries:
+            value = item
+            for key in path:
+                value = value[key]
+            values.append(float(value))
+        return round(float(np.mean(values)), 6)
+
+    by_fold = {}
+    for fold in sorted({item["fold"] for item in summaries}):
+        fold_items = [item for item in summaries if item["fold"] == fold]
+        by_fold[fold] = {
+            "samples": len(fold_items),
+            "mean_iou_vs_rule": round(
+                float(np.mean([item["metrics_vs_rule"]["mean_iou"] for item in fold_items])), 6
+            ),
+            "mean_prediction_transition_percent": round(
+                float(np.mean([item["prediction_percent"]["transition"] for item in fold_items])), 6
+            ),
+            "mean_transition_percent_delta": round(
+                float(np.mean([item["prediction_minus_rule_percent"]["transition"] for item in fold_items])), 6
+            ),
+        }
+
+    worst = min(summaries, key=lambda item: item["metrics_vs_rule"]["mean_iou"])
+    return {
+        "samples": len(summaries),
+        "mean_point_accuracy_vs_rule": mean_of(("metrics_vs_rule", "point_accuracy")),
+        "mean_iou_vs_rule": mean_of(("metrics_vs_rule", "mean_iou")),
+        "mean_macro_f1_vs_rule": mean_of(("metrics_vs_rule", "macro_f1")),
+        "mean_rule_transition_percent": mean_of(("rule_percent", "transition")),
+        "mean_prediction_transition_percent": mean_of(("prediction_percent", "transition")),
+        "mean_transition_percent_delta": mean_of(("prediction_minus_rule_percent", "transition")),
+        "worst_sample": {
+            "fold": worst["fold"],
+            "relative_cut_file": worst["relative_cut_file"],
+            "mean_iou_vs_rule": worst["metrics_vs_rule"]["mean_iou"],
+            "transition_percent_delta": worst["prediction_minus_rule_percent"]["transition"],
+            "output": worst["output"],
+        },
+        "by_fold": by_fold,
+    }
 
 
 def parse_args():
@@ -364,6 +482,7 @@ def main():
 
     image_files = sorted(output_dir.glob("fold_*/*_full_prediction.png"))
     contact_sheet = make_contact_sheet(image_files, output_dir / "full_waveform_prediction_contact_sheet.jpg")
+    sample_summary_csv = write_sample_summary_csv(summaries, output_dir / "full_waveform_prediction_summary.csv")
     run_summary = {
         "data_root": str(data_root),
         "output_dir": str(output_dir),
@@ -374,6 +493,8 @@ def main():
         "stride": args.stride,
         "samples": len(summaries),
         "contact_sheet": contact_sheet,
+        "sample_summary_csv": sample_summary_csv,
+        "aggregate": aggregate_summaries(summaries),
         "summaries": summaries,
     }
     (output_dir / "run_summary.json").write_text(json.dumps(run_summary, indent=2), encoding="utf-8")
