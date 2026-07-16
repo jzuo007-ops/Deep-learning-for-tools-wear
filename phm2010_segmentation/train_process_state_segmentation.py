@@ -73,6 +73,20 @@ def get_class_names(task: str) -> dict[int, str]:
     return BINARY_CLASS_NAMES if task == "binary" else CLASS_NAMES
 
 
+def print_training_config(args, folds, num_classes: int) -> None:
+    config = {
+        "folds": list(folds),
+        "num_classes": num_classes,
+        "class_names": get_class_names(args.task),
+        "device": "cuda:0" if torch.cuda.is_available() and not args.cpu else "cpu",
+        "cuda_available": torch.cuda.is_available(),
+        "parameters": vars(args),
+    }
+    print("\n========== Training configuration ==========")
+    print(json.dumps(to_jsonable(config), indent=2, ensure_ascii=False))
+    print("============================================\n", flush=True)
+
+
 def evaluate(model, loader, device, num_classes=3, class_names=None):
     model.eval()
     confusion = np.zeros((num_classes, num_classes), dtype=np.int64)
@@ -291,6 +305,7 @@ def main():
             f"got {len(args.class_weights)}"
         )
     folds = TOOLS if args.fold == "all" else (args.fold,)
+    print_training_config(args, folds, num_classes=num_classes)
     summaries = [run_fold(args, fold) for fold in folds]
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
