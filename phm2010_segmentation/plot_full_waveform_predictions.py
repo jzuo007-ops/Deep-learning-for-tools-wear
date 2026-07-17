@@ -433,7 +433,7 @@ def parse_args():
     parser.add_argument("--backbone", default="resnet50", choices=["resnet50", "lstm"])
     parser.add_argument("--crop-length", type=int, default=8192)
     parser.add_argument("--stride", type=int, default=4096)
-    parser.add_argument("--inference-mode", default="full", choices=["full", "sliding"])
+    parser.add_argument("--inference-mode", default="sliding", choices=["sliding", "full"])
     parser.add_argument("--samples-per-fold", type=int, default=3)
     parser.add_argument("--all-cuts", action="store_true")
     parser.add_argument("--max-plot-points", type=int, default=30000)

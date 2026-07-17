@@ -100,12 +100,13 @@ Default editor run configuration:
 - `task = binary`
 - `eval_mode = multi_position`
 - `train_sampling = multi_position_random`
-- `train_windows_per_cut = 5`
-- `eval_windows_per_cut = 5`
+- `train_windows_per_cut = 21`
+- `eval_windows_per_cut = 21`
+- `class_weights = [1.0, 1.0]`
 - `exclude_samples_csv = phm2010_segmentation/config/non_cutting_exclude_samples.csv`
 - `save_checkpoint = true`
 
-This means running `train_process_state_segmentation.py` directly from an editor uses the current paper-oriented setting by default: transition/stable-cutting segmentation, persistent edge non-cutting sample exclusion, and multi-position windows from each complete cut. Each training cut contributes windows near the entry, interior, and exit portions of the machining waveform, with small random jitter during training.
+This means running `train_process_state_segmentation.py` directly from an editor uses the current paper-oriented setting by default: transition/stable-cutting segmentation, persistent edge non-cutting sample exclusion, and multi-position windows from each complete cut. Each training cut contributes windows near the entry, interior, and exit portions of the machining waveform, with small random jitter during training. The default 21 windows per cut keep the training label ratio closer to a complete waveform, where transition is about 10% and stable cutting is about 90%.
 
 Each fold saves its best model checkpoint by default:
 
@@ -224,12 +225,12 @@ Default behavior:
 ```text
 folds: c1-c6
 checkpoint: phm2010_segmentation/outputs/fold_c*/best_model.pth
-inference mode: full complete-cut inference
+inference mode: sliding window inference
 samples per fold: 3 evenly spaced test cuts
 output: phm2010_segmentation/outputs/full_waveform_predictions/
 ```
 
-The default prediction mode feeds one complete cut into the model at a time, so the plotted result is not produced by sliding-window voting. If GPU memory is insufficient for a complete cut, use `--inference-mode sliding` as a fallback diagnostic mode.
+The default prediction mode uses sliding windows because the current training pipeline trains fixed-length windows rather than complete cuts. Use `--inference-mode full` only as a diagnostic; it feeds one complete cut into the model in one pass and can be badly mismatched with window-trained checkpoints.
 
 The output includes one PNG and one JSON per cut, plus `full_waveform_prediction_contact_sheet.jpg`, `full_waveform_prediction_summary.csv`, and `run_summary.json`. This visualization is required before using the segmentation model for VB regression, because window-level metrics can still hide poor full-waveform behavior.
 
@@ -279,6 +280,18 @@ green:  stable_cutting
 - Code change made after this diagnosis: default training now uses `multi_position_random` sampling with five windows per cut, and default validation/test uses `multi_position` windows instead of the older three-window boundary-only setting. The full-waveform plotting script now writes `full_waveform_prediction_summary.csv` and full-waveform metrics against pseudo labels.
 - Follow-up correction: the full-waveform plotting script now defaults to `inference_mode = full`, which feeds a complete cut to the model in one pass. Sliding-window prediction is retained only as `--inference-mode sliding` for memory-limited diagnostics.
 - Next required experiment: retrain all folds with the new default sampler, rerun `plot_full_waveform_predictions.py`, and compare full-waveform mIoU/transition-ratio error before using model-selected stable-cutting segments for VB regression.
+
+2026-07-17 full-waveform mismatch after retraining:
+
+- Result file inspected: `phm2010_segmentation/outputs/full_waveform_predictions/run_summary.json`.
+- Configuration: retrained `deeplabv3_1d + resnet50`, binary classes, `eval_mode = multi_position`, full complete-cut inference.
+- Window-level cross-validation stayed high, but complete-cut prediction was poor: mean full-waveform mIoU versus pseudo labels = `0.3328`, mean predicted transition ratio = `48.26%`, while rule transition ratio is about `10.00%`.
+- Worst fold-level behavior:
+  - `c4`: predicted transition `99.67%`, mean full-waveform mIoU = `0.0517`.
+  - `c3`: predicted transition `81.35%`, mean full-waveform mIoU = `0.1731`.
+  - `c1`: predicted transition `68.00%`, mean full-waveform mIoU = `0.2469`.
+- Diagnosis: this run exposed two mismatches. First, the model was trained on fixed-length windows but plotted with complete-cut inference, causing normalization and sequence-length distribution shift. Second, the old five-window training setup over-sampled transition windows: roughly two edge windows out of five were transition-heavy, so the training transition ratio was much larger than the true complete-cut ratio of about 10%. The previous binary class weight `[2.0, 1.0]` amplified that bias further.
+- Code change made after this diagnosis: default binary class weights changed to `[1.0, 1.0]`, default `train_windows_per_cut` and `eval_windows_per_cut` changed from `5` to `21`, and full-waveform plotting defaults back to sliding-window inference to match the current window-trained model. Complete-cut inference remains available as `--inference-mode full` for diagnostics only.
 
 2026-07-13 binary boundary-evaluation result:
 

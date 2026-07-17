@@ -87,6 +87,12 @@ def print_training_config(args, folds, num_classes: int) -> None:
     print("============================================\n", flush=True)
 
 
+def count_trainable_parameters(model) -> tuple[int, int]:
+    total = sum(parameter.numel() for parameter in model.parameters())
+    trainable = sum(parameter.numel() for parameter in model.parameters() if parameter.requires_grad)
+    return total, trainable
+
+
 def evaluate(model, loader, device, num_classes=3, class_names=None):
     model.eval()
     confusion = np.zeros((num_classes, num_classes), dtype=np.int64)
@@ -167,6 +173,12 @@ def run_fold(args, test_tool: str):
         aux_loss=True,
         backbone_name=args.backbone,
     ).to(device)
+    total_params, trainable_params = count_trainable_parameters(model)
+    print(
+        f"fold={test_tool} model={args.model} backbone={args.backbone} "
+        f"total_params={total_params:,} trainable_params={trainable_params:,}",
+        flush=True,
+    )
     class_weights = torch.tensor(args.class_weights, dtype=torch.float32, device=device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(args.epochs, 1))
@@ -267,8 +279,8 @@ def parse_args():
         default="multi_position_random",
         choices=["random", "multi_position", "multi_position_random"],
     )
-    parser.add_argument("--train-windows-per-cut", type=int, default=5)
-    parser.add_argument("--eval-windows-per-cut", type=int, default=5)
+    parser.add_argument("--train-windows-per-cut", type=int, default=21)
+    parser.add_argument("--eval-windows-per-cut", type=int, default=21)
     parser.add_argument("--model", default="deeplabv3_1d", choices=list(SEGMENTATION_MODEL_NAMES))
     parser.add_argument("--backbone", default="resnet50", choices=["resnet50", "lstm"])
     parser.add_argument("--lr", type=float, default=5e-4)
@@ -298,7 +310,7 @@ def main():
     set_seed(args.seed)
     num_classes = len(get_class_names(args.task))
     if args.class_weights is None:
-        args.class_weights = [2.0, 1.0] if args.task == "binary" else [1.0, 2.0, 1.0]
+        args.class_weights = [1.0, 1.0] if args.task == "binary" else [1.0, 1.0, 1.0]
     if len(args.class_weights) != num_classes:
         raise ValueError(
             f"--class-weights must contain {num_classes} values for task={args.task}, "
